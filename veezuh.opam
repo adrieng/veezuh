@@ -11,6 +11,9 @@ depends:
 [
   "ocamlfind" {build}
   "jbuilder" {build & >= "1.0"}
+  "lablgtk"
+  "sqlite3"
+  "sequence"
 ]
 depopts: []
 build: [["jbuilder" "build" "-p" name "-j" jobs]]

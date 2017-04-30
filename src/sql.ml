@@ -1,0 +1,47 @@
+include Sqlite3
+
+type 'a sqlty =
+  | Int : int sqlty
+  | Real : float sqlty
+  | Text : string sqlty
+  | Pair : 'a sqlty * 'b sqlty -> ('a * 'b) sqlty
+
+let parse ty (arr : string array) =
+  let rec walk : type a. a sqlty -> int -> a * int =
+  fun ty next ->
+  match ty with
+  | Int ->
+     int_of_string arr.(next),
+     next + 1
+  | Real ->
+     float_of_string arr.(next),
+     next + 1
+  | Text ->
+     arr.(next),
+     next + 1
+  | Pair (ty1, ty2) ->
+     let r1, next = walk ty1 next in
+     let r2, next = walk ty2 next in
+     (r1, r2), next
+  in
+
+  let r, next = walk ty 0 in
+  if next <> Array.length arr
+  then
+    invalid_arg
+      (Printf.sprintf "parse: expected %d fields, got %d fields"
+        next
+        (Array.length arr))
+  ;
+  r
+
+let results : type a. db -> a sqlty -> string -> a Sequence.t =
+  fun db ty req k ->
+  let cb s = k (parse ty s) in
+  match exec_not_null_no_headers db ~cb req with
+  | Rc.OK ->
+     ()
+  | err ->
+     failwith (Rc.to_string err)
+  | exception Error str ->
+     failwith str

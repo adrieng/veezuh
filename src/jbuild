@@ -1,7 +1,10 @@
 (jbuild_version 1)
 
 (executables
- ((names (veezuh))))
+ (
+ (names (veezuh))
+ (libraries (threads lablgtk2 sqlite3 sequence))
+ ))
 
 (install
  ((section bin)
