@@ -1,0 +1,8 @@
+(jbuild_version 1)
+
+(executables
+ ((names (veezuh))))
+
+(install
+ ((section bin)
+  (files ((veezuh.exe as veezuh)))))
