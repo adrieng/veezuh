@@ -35,13 +35,17 @@ let parse ty (arr : string array) =
   ;
   r
 
-let results : type a. db -> a sqlty -> string -> a Sequence.t =
-  fun db ty req k ->
-  let cb s = k (parse ty s) in
+let results : type a. db -> a sqlty -> string -> a list =
+  fun db ty req ->
+  let r = ref [] in
+  let cb s = r := parse ty s :: !r in
   match exec_not_null_no_headers db ~cb req with
   | Rc.OK ->
-     ()
+     List.rev !r
   | err ->
      failwith (Rc.to_string err)
   | exception Error str ->
      failwith str
+
+let result db ty req =
+  List.hd @@ results db ty req
