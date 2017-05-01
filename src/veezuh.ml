@@ -32,11 +32,11 @@ let () =
     then "./datasets/fib.opt.12631.sqlite"
     else Sys.argv.(1)
   in
-  let ds = Dataset.from_sqlite_file ds in
-  let start, finish = Dataset.time_range ds in
+  let ds = Trace.from_sqlite_file ds in
+  let start, finish = Trace.time_range ds in
   Format.printf "Start: %f, Finish: %f, %d processors@."
     start
     finish
-    (Dataset.number_of_processors ds)
-    ;
+    (Trace.number_of_processors ds)
+  ;
   main ds
