@@ -8,6 +8,17 @@ let tables db =
     Text
     "SELECT name FROM sqlite_master WHERE type = 'table';"
 
+let purge db =
+  let keep = [ "events" ] in
+  let drop s =
+    exec_check
+      db
+      (Printf.sprintf "DROP TABLE %s;" s)
+  in
+  List.(tables db
+        |> filter (fun s -> not @@ List.mem s keep)
+        |> iter drop)
+
 let from_sqlite_file filename =
   let db = db_open ~mode:`NO_CREATE filename in
   let tables = tables db in
