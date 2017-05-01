@@ -49,3 +49,10 @@ let results : type a. db -> a sqlty -> string -> a list =
 
 let result db ty req =
   List.hd @@ results db ty req
+
+let exec_check db req =
+  match exec db req with
+  | Rc.OK ->
+     ()
+  | err ->
+     failwith @@ "exec_check: " ^ Rc.to_string err
