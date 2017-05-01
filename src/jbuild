@@ -3,7 +3,7 @@
 (executables
  (
  (names (veezuh))
- (libraries (threads lablgtk2 sqlite3 sequence))
+ (libraries (threads lablgtk2 sqlite3))
  ))
 
 (install
