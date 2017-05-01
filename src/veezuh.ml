@@ -1,13 +1,18 @@
 (* Graph widget test program. *)
 
 open GMain
-open GdkKeysyms
 open Timeline
 
-let main ds =
+let width = 800
+
+let height = 600
+
+let main trace =
+  (* Initialize Gtk. DO NOT REMOVE! *)
   ignore @@ GMain.init ();
 
-  let window = GWindow.window ~title:"Veezuh" () in
+  (* Window *)
+  let window = GWindow.window ~width ~height ~title:"Veezuh" () in
   let vbox = GPack.vbox ~packing:window#add () in
   ignore @@ window#connect#destroy ~callback:Main.quit;
 
@@ -19,24 +24,27 @@ let main ds =
 
   (* File menu *)
   let factory = new GMenu.factory file_menu ~accel_group in
-  ignore @@ factory#add_item "Quit" ~key:_Q ~callback:Main.quit;
+  ignore @@ factory#add_item "Quit" ~key:GdkKeysyms._Q ~callback:Main.quit;
+  window#add_accel_group accel_group;
+
+  (* Timeline *)
+  let _ = new timelines ~packing:vbox#add trace in
 
   (* Display the windows and enter Gtk+ main loop *)
-  window#add_accel_group accel_group;
   window#show ();
   Main.main ()
 
 let () =
-  let ds =
+  let fn =
     if Array.length Sys.argv < 2
     then "./datasets/fib.opt.12631.sqlite"
     else Sys.argv.(1)
   in
-  let ds = Trace.from_sqlite_file ds in
-  let start, finish = Trace.time_range ds in
+  let trace = Trace.from_sqlite_file fn in
+  let start, finish = Trace.time_range trace in
   Format.printf "Start: %f, Finish: %f, %d processors@."
     start
     finish
-    (Trace.number_of_processors ds)
+    (Trace.number_of_processors trace)
   ;
-  main ds
+  main trace

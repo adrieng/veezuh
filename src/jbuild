@@ -3,7 +3,7 @@
 (executables
  (
  (names (veezuh))
- (libraries (threads lablgtk2 sqlite3))
+ (libraries (threads lablgtk2 sqlite3 cairo2 cairo2.lablgtk2))
  ))
 
 (install
