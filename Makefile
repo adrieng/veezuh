@@ -1,4 +1,4 @@
-.PHONY: all clean install run
+.PHONY: all clean uninstall install run
 
 all:
 	jbuilder build
@@ -9,5 +9,8 @@ clean:
 install: all
 	jbuilder install
 
+uninstall: all
+	jbuilder uninstall
+
 run: all
-	./_build/default/src/veezuh.exe
+	./_build/default/src/veezuh.exe ./datasets/fib.opt.4proc-std.sqlite
