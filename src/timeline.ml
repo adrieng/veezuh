@@ -15,6 +15,12 @@ let find_good_unit_prefix t =
   t, List.nth ["ns"; "us"; "ms"; "s"; "m"; "h"] (p + 3)
 ;;
 
+let rgba cr (r, g, b, a) =
+  Cairo.set_source_rgba cr ~r ~g ~b ~a
+
+let black cr =
+  Cairo.set_source_rgb cr 0. 0. 0.
+
 let draw_scale_bar
       ~number_of_increments
       ~thickness
@@ -28,6 +34,8 @@ let draw_scale_bar
 
   (* Move so that 0 is verticaly centered. *)
   Cairo.translate cr 0. (height /. 2.);
+
+  black cr;
 
   (* Draw the main axis. *)
   Cairo.set_line_width cr thickness;
@@ -66,6 +74,63 @@ let draw_scale_bar
   draw_increment width;
 
   ()
+;;
+
+let draw_processor_chart
+      ?(color_user = (0., 1., 0.4, 1.))
+      ?(color_gc = (0.7, 0., 0.2, 1.))
+      ~width
+      ~height
+      ~cur_min_time
+      ~cur_max_time
+      ~processor
+      ~trace
+      cr =
+  (* Draw the "Processor XXX" label. *)
+  let label = "Processor " ^ string_of_int processor in
+  let label_extent = Cairo.text_extents cr label in
+  black cr;
+  Cairo.move_to
+    cr
+    (-. label_extent.width -. 5.)
+    (height /. 2. +. label_extent.height /. 2.);
+  Cairo.Path.text cr label;
+  Cairo.stroke cr;
+
+  (* By default, a processor is considered active. *)
+  rgba cr color_user;
+  Cairo.rectangle cr 0. 0. width height;
+  Cairo.fill cr;
+
+  (* Draw GC period *)
+  rgba cr color_gc;
+
+  let total_time = cur_max_time -. cur_min_time in
+  let x_ratio = width /. total_time in
+
+  let draw_gc_period (start, stop) =
+    (* start and stop are in absolute time, we have to translate them first to
+       local time, then to x coordinates. *)
+    let l_start = start -. cur_min_time in
+    let l_stop = stop -. cur_min_time in
+    let x_start = l_start *. x_ratio in
+    let x_stop = l_stop *. x_ratio in
+    let width = max (x_stop -. x_start) 1. in
+    Cairo.rectangle cr x_start 0. width height;
+    Cairo.fill cr
+  in
+
+  let gc_periods =
+    Trace.gc_periods_between
+      ~min:cur_min_time
+      ~max:cur_max_time
+      ~proc:processor
+      trace
+  in
+  List.iter draw_gc_period gc_periods;
+
+  ()
+;;
 
 class timeline ~packing trace =
   let pcount = Trace.number_of_processors trace in
@@ -89,25 +154,47 @@ class timeline ~packing trace =
 
     val scale_bar_height = 40.
 
+    val proc_chart_horizontal_spacing = 5.
+
+    val proc_chart_max_height = 30.
+
     method expose () =
       let cr = Cairo_gtk.create da#misc#window in
       let al = da#misc#allocation in
       let width = float al.Gtk.width in
       let height = float al.Gtk.height in
 
-      let scale_bar_width = width *. 0.8 in
-      let scale_bar_offset = (width -. scale_bar_width) /. 2. in
-      Cairo.translate cr scale_bar_offset 0.;
+      let chart_width = width *. 0.9 in
+      let chart_offset = (width -. chart_width) *. 0.9 in
+
+      (* Draw the scale bar *)
+      Cairo.translate cr chart_offset 0.;
       draw_scale_bar
         ~number_of_increments:scale_bar_number_of_increments
         ~thickness:scale_bar_thickness
         ~increments_height:scale_bar_increments_height
-        ~width:scale_bar_width
+        ~width:chart_width
         ~height:scale_bar_height
         ~cur_min_time
         ~cur_max_time
         cr;
 
+      (* Draw each processor's chart *)
+      let proc_chart_height =
+        min ((height -. scale_bar_height) /. float pcount) proc_chart_max_height
+      in
+      for p = 0 to pcount - 1 do
+        Cairo.translate cr 0. proc_chart_horizontal_spacing;
+        draw_processor_chart
+          ~width:chart_width
+          ~height:proc_chart_height
+          ~cur_min_time
+          ~cur_max_time
+          ~processor:p
+          ~trace
+          cr;
+        Cairo.translate cr 0. proc_chart_height;
+      done;
       Cairo.identity_matrix cr;
 
       ()

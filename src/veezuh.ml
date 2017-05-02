@@ -40,7 +40,9 @@ let main trace =
 let () =
   let fn =
     if Array.length Sys.argv < 2
-    then "./datasets/fib.opt.12631.sqlite"
+    then (Printf.eprintf "Usage: %s file.sqlite" Sys.argv.(0); exit 1)
     else Sys.argv.(1)
   in
-  main @@ Trace.from_sqlite_file fn
+
+  let trace = Trace.from_sqlite_file fn in
+  main @@ trace

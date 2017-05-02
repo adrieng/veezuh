@@ -9,12 +9,21 @@ type 'a sqlty =
 let parse ty (arr : string array) =
   let rec walk : type a. a sqlty -> int -> a * int =
   fun ty next ->
+  let get () =
+    if next >= Array.length arr
+    then
+      invalid_arg
+        (Printf.sprintf "parse: trying to access index %d of array of length %d"
+           next (Array.length arr))
+    else
+      arr.(next)
+  in
   match ty with
   | Int ->
-     int_of_string arr.(next),
+     int_of_string (get ()),
      next + 1
   | Real ->
-     float_of_string arr.(next),
+     float_of_string (get ()),
      next + 1
   | Text ->
      arr.(next),
@@ -43,9 +52,9 @@ let results : type a. db -> a sqlty -> string -> a list =
   | Rc.OK ->
      List.rev !r
   | err ->
-     failwith (Rc.to_string err)
+     failwith ("results: " ^ Rc.to_string err ^ " executing " ^ req)
   | exception Error str ->
-     failwith str
+     failwith ("results: " ^ str ^ " executing " ^ req)
 
 let result db ty req =
   List.hd @@ results db ty req
