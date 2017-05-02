@@ -20,6 +20,12 @@ let rgba cr (r, g, b, a) =
 let black cr =
   Cairo.set_source_rgb cr 0. 0. 0.
 
+let gray_rect ~x ~y ~width ~height cr =
+  Cairo.set_source_rgb cr 0.5 0.5 0.5;
+  Cairo.rectangle cr 0. 0. width height;
+  Cairo.fill cr;
+  ()
+
 let draw_background
       ~width
       ~height
@@ -39,10 +45,7 @@ let draw_scale_bar
       ~cur_min_time
       ~cur_max_time
       cr =
-  assert (height >= thickness /. 2. +. increments_height);
-
-  (* Move so that 0 is verticaly centered. *)
-  Cairo.translate cr 0. (height /. 2.);
+  Cairo.translate cr 0. (height -. 1.);
 
   black cr;
 
@@ -86,8 +89,8 @@ let draw_scale_bar
 ;;
 
 let draw_processor_chart
-      ?(color_user = (0., 1., 0.4, 1.))
-      ?(color_gc = (0.7, 0., 0.2, 1.))
+      ?(color_user = (0., 1., 0.2, 0.2))
+      ?(color_gc = (1., 0., 0.5, 1.))
       ~width
       ~height
       ~cur_min_time
@@ -95,8 +98,8 @@ let draw_processor_chart
       ~processor
       ~trace
       cr =
-  (* Draw the "Processor XXX" label. *)
-  let label = "Processor " ^ string_of_int processor in
+  (* Draw the "P XXX" label. *)
+  let label = "P" ^ string_of_int processor in
   let label_extent = Cairo.text_extents cr label in
   black cr;
   Cairo.move_to
@@ -148,7 +151,7 @@ class timeline ~packing trace =
 
   let sw = GBin.scrolled_window ~packing:packing () in
 
-  let da = GMisc.drawing_area ~packing:sw#add () in
+  let da = GMisc.drawing_area ~packing:sw#add_with_viewport () in
 
   object (self)
     inherit GObj.widget da#as_widget
@@ -196,15 +199,21 @@ class timeline ~packing trace =
 
     val scale_bar_increments_height = 4.
 
-    val scale_bar_height = 40.
+    val scale_bar_height = 20.
 
-    val proc_chart_horizontal_spacing = 5.
+    val proc_chart_horizontal_spacing = 2.
 
-    val proc_chart_max_height = 30.
+    val proc_chart_height = 30.
 
     val mutable width = 0.
 
     val mutable height = 0.
+
+    method height () =
+      let per_processor_height =
+        proc_chart_height +. proc_chart_horizontal_spacing
+      in
+      scale_bar_height +. float pcount *. per_processor_height
 
     method chart_width () =
       width *. 0.9
@@ -218,7 +227,11 @@ class timeline ~packing trace =
     method clamp_x_to_chart x =
       min (max x (self#chart_x_min ())) (self#chart_x_max ())
 
-    method expose () =
+    method width () =
+      let al = sw#misc#allocation in
+      float (al.Gtk.width - 10)
+
+    method on_expose () =
       let cr = Cairo_gtk.create da#misc#window in
       let al = da#misc#allocation in
       width <- float al.Gtk.width;
@@ -226,6 +239,12 @@ class timeline ~packing trace =
 
       let chart_width = self#chart_width () in
       let chart_offset = self#chart_x_min () in
+
+      (* Draw background *)
+      draw_background
+        ~width
+        ~height
+        cr;
 
       (* Draw the scale bar *)
       Cairo.translate cr chart_offset 0.;
@@ -240,12 +259,12 @@ class timeline ~packing trace =
         ~cur_max_time
         cr;
 
+      Cairo.identity_matrix cr;
+      Cairo.translate cr chart_offset scale_bar_height;
+
       (* Draw each processor's chart *)
-      let proc_chart_height =
-        min ((height -. scale_bar_height) /. float pcount) proc_chart_max_height
-      in
       for p = 0 to pcount - 1 do
-        Cairo.translate cr 0. proc_chart_horizontal_spacing;
+        Cairo.translate ~x:0. ~y:proc_chart_horizontal_spacing cr;
         draw_processor_chart
           ~width:chart_width
           ~height:proc_chart_height
@@ -254,36 +273,53 @@ class timeline ~packing trace =
           ~processor:p
           ~trace
           cr;
-        Cairo.translate cr 0. proc_chart_height;
+        Cairo.translate ~x:0. ~y:proc_chart_height cr
       done;
       Cairo.identity_matrix cr;
 
       flush stderr;
       ()
 
-    method scroll (s : GdkEvent.Scroll.t) =
-      let x_px = self#clamp_x_to_chart (GdkEvent.Scroll.x s) in
-      let x_relpos = (x_px -. self#chart_x_min ()) /. self#chart_width () in
-      Format.eprintf "SCROLL: %f %f %f %f@."
-        x_px
-        (self#chart_width ())
-        (x_px -. self#chart_x_min ())
-        x_relpos;
-      match GdkEvent.Scroll.direction s with
-      | `UP ->
-         self#zoom_in x_relpos
-      | `DOWN ->
-         self#zoom_out x_relpos
-      | _ ->
-         ()
+    method on_scroll e =
+      let state = GdkEvent.Scroll.state e in
+      let modifiers = Gdk.Convert.modifier state in
+      if List.mem `CONTROL modifiers
+      then
+        let x_px = self#clamp_x_to_chart (GdkEvent.Scroll.x e) in
+        let x_relpos = (x_px -. self#chart_x_min ()) /. self#chart_width () in
+        match GdkEvent.Scroll.direction e with
+        | `UP ->
+           self#zoom_in x_relpos
+        | `DOWN ->
+           self#zoom_out x_relpos
+        | _ ->
+           ()
+
+    method on_configure e =
+      let width = GdkEvent.Configure.width e - 10 in
+      let height = int_of_float @@ self#height () in
+      da#misc#set_size_request ~width ~height ();
+      ()
+
+    method on_click e =
+      let x = GdkEvent.Button.x e in
+      let y = GdkEvent.Button.y e in
+      Format.eprintf "CLICK %f %f@." x y;
+      ()
 
     initializer
-    let expose _ = self#expose (); false in
-    ignore @@ da#event#connect#expose ~callback:expose;
-    let scroll s = self#scroll s; false in
-    ignore @@ da#event#connect#scroll ~callback:scroll;
-    ignore @@ da#event#add [`SCROLL];
     sw#set_hpolicy `AUTOMATIC;
     sw#set_vpolicy `AUTOMATIC;
+    (* Expose and configure events *)
+    let expose _ = self#on_expose (); false in
+    ignore @@ da#event#connect#expose ~callback:expose;
+    let configure e = self#on_configure e; false in
+    ignore @@ da#event#connect#configure ~callback:configure;
+    (* Scroll and click events *)
+    let scroll e = self#on_scroll e; false in
+    ignore @@ da#event#connect#scroll ~callback:scroll;
+    let click e = self#on_click e; false in
+    ignore @@ da#event#connect#button_press ~callback:click;
+    ignore @@ da#event#add [`SCROLL; `BUTTON_PRESS];
     ()
   end
