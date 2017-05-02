@@ -275,9 +275,6 @@ class timeline ~packing trace =
       (* Ask GTK to send an expose event *)
       self#repaint ()
 
-    method zoom_restore () =
-      self#zoom_to min_time max_time
-
     method zoom_adjust x_prop zoom_factor =
       let adjustment = zoom_factor *. self#cur_time_span () in
 
@@ -298,6 +295,16 @@ class timeline ~packing trace =
     method zoom_out x_prop =
       self#zoom_adjust x_prop (-. scroll_zoom_factor)
 
+    method zoom_to_default () =
+      self#zoom_to min_time max_time
+
+    method zoom_to_selection () =
+      let left = min cur_sel_start cur_sel_stop in
+      let right = max cur_sel_start cur_sel_stop in
+      self#zoom_to left right;
+      self#reset_selection ();
+      ()
+
     (* Methods updating selection *)
 
     method set_sel_start start =
@@ -305,6 +312,11 @@ class timeline ~packing trace =
 
     method set_sel_stop stop =
       cur_sel_stop <- self#truncate_time_to_cur_time_span stop
+
+    method reset_selection () =
+      cur_sel_start <- cur_min_time;
+      cur_sel_stop <- cur_min_time;
+      self#repaint ()
 
     (* Event handlers *)
 
