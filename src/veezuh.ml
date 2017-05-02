@@ -21,17 +21,24 @@ let main filename trace =
   let factory = new GMenu.factory menubar in
   let accel_group = factory#accel_group in
   let file_menu = factory#add_submenu "File" in
+  let view_menu = factory#add_submenu "View" in
 
   (* File menu *)
   let factory = new GMenu.factory file_menu ~accel_group in
   ignore @@ factory#add_item "Quit" ~key:GdkKeysyms._Q ~callback:Main.quit;
-  window#add_accel_group accel_group;
 
-  (* Lable *)
+  (* Timeline and label *)
   ignore @@ GMisc.label ~markup:"<b><u>Timeline</u></b>" ~packing:vbox#pack ();
+  let tl = new timeline ~packing:(vbox#pack ~expand:true) trace in
 
-  (* Timeline *)
-  let _ = new timeline ~packing:(vbox#pack ~expand:true) trace in
+  (* View menu *)
+  let factory = new GMenu.factory view_menu ~accel_group in
+  ignore @@
+    factory#add_item
+      "Reload"
+      ~key:GdkKeysyms._R
+      ~callback:(fun _ -> tl#zoom_restore ());
+  window#add_accel_group accel_group;
 
   (* Display the windows and enter Gtk+ main loop *)
   window#show ();
