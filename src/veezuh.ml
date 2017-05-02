@@ -7,12 +7,12 @@ let width = 800
 
 let height = 600
 
-let main trace =
+let main filename trace =
   (* Initialize Gtk. DO NOT REMOVE! *)
   ignore @@ GMain.init ();
 
   (* Window *)
-  let window = GWindow.window ~width ~height ~title:"Veezuh" () in
+  let window = GWindow.window ~width ~height ~title:("Veezuh " ^ filename) () in
   let vbox = GPack.vbox ~packing:window#add () in
   ignore @@ window#connect#destroy ~callback:Main.quit;
 
@@ -45,4 +45,4 @@ let () =
   in
 
   let trace = Trace.from_sqlite_file fn in
-  main @@ trace
+  main fn trace
