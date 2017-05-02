@@ -1,51 +1,119 @@
 open Cairo
 
-let pi2 = 8. *. atan 1.
+let pi = 4. *. atan 1.
+let pi2 = 2. *. pi
 
-let draw ~width ~height cr =
-  Printf.printf "width: %f, height: %f\n" width height;
-  let r = 0.25 *. width in
-  set_source_rgba cr 0. 1. 0. 0.5;
-  arc cr (0.5 *. width) (0.35 *. height) r 0. pi2;
-  fill cr;
-  set_source_rgba cr 1. 0. 0. 0.5;
-  arc cr (0.35 *. width) (0.65 *. height) r 0. pi2;
-  fill cr;
-  set_source_rgba cr 0. 0. 1. 0.5;
-  arc cr (0.65 *. width) (0.65 *. height) r 0. pi2;
-  fill cr;
+let find_good_unit_prefix t =
+  assert (t >= 0.);
+  let rec find t p =
+    if p <= -3 || p >= 2 then t, p
+    else if t <= 1. then find (t *. 1000.) (p - 1)
+    else if t >= 60. then find (t /. 60.) (p + 1)
+    else t, p
+  in
+  let t, p = find t 0 in
+  t, List.nth ["ns"; "us"; "ms"; "s"; "m"; "h"] (p + 3)
 ;;
 
-class timeline ~packing trace p =
-  let box = GPack.hbox ~packing () in
-  let lbl =
-    GMisc.label ~text:(Printf.sprintf "Processor %d" p) ~packing:box#add () in
-  let da = GMisc.drawing_area ~packing:box#add () in
-  object (self)
-    inherit GObj.widget box#as_widget
+let draw_scale_bar
+      ~number_of_increments
+      ~thickness
+      ~increments_height
+      ~width
+      ~height
+      ~cur_min_time
+      ~cur_max_time
+      cr =
+  assert (height >= thickness /. 2. +. increments_height);
 
-    method expose () =
-      ()
+  (* Move so that 0 is verticaly centered. *)
+  Cairo.translate cr 0. (height /. 2.);
 
-    initializer
-      Printf.printf "Timeline %d initialized.\n" p;
-      ()
-  end
+  (* Draw the main axis. *)
+  Cairo.set_line_width cr thickness;
+  Cairo.move_to cr 0. 0.;
+  Cairo.line_to cr width 0.;
+  Cairo.stroke cr;
 
-class timelines ~packing trace =
+  (* Draw the increments *)
+
+  let pixels_per_increment = width /. float number_of_increments in
+  let total_time = cur_max_time -. cur_min_time in
+  let time_per_increment = total_time /. float number_of_increments in
+
+  let draw_increment ?(label = "") x =
+    let y = -. increments_height -. thickness in
+    (* Draw increment bar *)
+    Cairo.move_to cr x 0.;
+    Cairo.line_to cr x y;
+    Cairo.stroke cr;
+    (* Draw increment label, if any *)
+    Cairo.move_to cr (x +. 2.) (-. 5.);
+    Cairo.Path.text cr label;
+    Cairo.stroke cr;
+  in
+
+  Cairo.set_line_width cr 1.;
+  for i = 0 to number_of_increments - 1 do
+    let x = float i *. pixels_per_increment in
+    (* Draw small label *)
+    let x_time = float i *. time_per_increment in
+    let x_time, pref = find_good_unit_prefix x_time in
+    let label = Printf.sprintf "%.2f %s" x_time pref in
+    draw_increment ~label x;
+  done;
+
+  draw_increment width;
+
+  ()
+
+class timeline ~packing trace =
   let pcount = Trace.number_of_processors trace in
 
-  (* let layout = GPack.layout ~packing () in *)
+  let min_time, max_time = Trace.time_range trace in
 
-  let lines = Array.init pcount (fun p -> new timeline packing trace p) in
+  let da = GMisc.drawing_area ~packing:packing () in
+
   object (self)
-    (* inherit GObj.widget layout#as_widget *)
+    inherit GObj.widget da#as_widget
+
+    val mutable cur_min_time = min_time
+
+    val mutable cur_max_time = max_time
+
+    val scale_bar_number_of_increments = 10
+
+    val scale_bar_thickness = 1.
+
+    val scale_bar_increments_height = 4.
+
+    val scale_bar_height = 40.
 
     method expose () =
-      Array.iter (fun tl -> tl#expose ()) lines;
+      let cr = Cairo_gtk.create da#misc#window in
+      let al = da#misc#allocation in
+      let width = float al.Gtk.width in
+      let height = float al.Gtk.height in
+
+      let scale_bar_width = width *. 0.8 in
+      let scale_bar_offset = (width -. scale_bar_width) /. 2. in
+      Cairo.translate cr scale_bar_offset 0.;
+      draw_scale_bar
+        ~number_of_increments:scale_bar_number_of_increments
+        ~thickness:scale_bar_thickness
+        ~increments_height:scale_bar_increments_height
+        ~width:scale_bar_width
+        ~height:scale_bar_height
+        ~cur_min_time
+        ~cur_max_time
+        cr;
+
+      Cairo.identity_matrix cr;
+
+      ()
 
     initializer
-      (* let callback _ = self#expose (); false in *)
-      (* ignore @@ layout#event#connect#expose ~callback; *)
-      Printf.printf "Timelines initialized.\n"
+    let callback _ = self#expose (); false in
+    ignore @@ da#event#connect#expose ~callback;
+    Printf.printf "Timelines initialized.\n"
   end
