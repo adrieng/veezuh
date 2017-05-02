@@ -21,12 +21,22 @@ let rgba cr (r, g, b, a) =
 let black cr =
   Cairo.set_source_rgb cr 0. 0. 0.
 
+let draw_background
+      ~width
+      ~height
+      cr =
+  Cairo.set_source_rgb cr 1. 1. 1.;
+  Cairo.rectangle cr 0. 0. width height;
+  Cairo.fill cr;
+  ()
+
 let draw_scale_bar
       ~number_of_increments
       ~thickness
       ~increments_height
       ~width
       ~height
+      ~min_time
       ~cur_min_time
       ~cur_max_time
       cr =
@@ -65,7 +75,7 @@ let draw_scale_bar
   for i = 0 to number_of_increments - 1 do
     let x = float i *. pixels_per_increment in
     (* Draw small label *)
-    let x_time = float i *. time_per_increment in
+    let x_time = float i *. time_per_increment +. cur_min_time -. min_time in
     let x_time, pref = find_good_unit_prefix x_time in
     let label = Printf.sprintf "%.2f %s" x_time pref in
     draw_increment ~label x;
@@ -137,7 +147,9 @@ class timeline ~packing trace =
 
   let min_time, max_time = Trace.time_range trace in
 
-  let da = GMisc.drawing_area ~packing:packing () in
+  let sw = GBin.scrolled_window ~packing:packing () in
+
+  let da = GMisc.drawing_area ~packing:sw#add () in
 
   object (self)
     inherit GObj.widget da#as_widget
@@ -145,6 +157,39 @@ class timeline ~packing trace =
     val mutable cur_min_time = min_time
 
     val mutable cur_max_time = max_time
+
+    method cur_time_span () =
+      cur_max_time -. cur_min_time
+
+    val scroll_zoom_factor = 0.05
+
+    method zoom_to new_min_time new_max_time =
+      cur_min_time <- max min_time new_min_time;
+      cur_max_time <- min max_time new_max_time;
+      GtkBase.Widget.queue_draw da#as_widget
+
+    method zoom_restore () =
+      self#zoom_to min_time max_time
+
+    method zoom_adjust x_prop zoom_factor =
+      let adjustment = zoom_factor *. self#cur_time_span () in
+
+      let left_adjustment =
+        if x_prop <= 0.2 then 0. else adjustment *. x_prop
+      in
+      let right_adjustment =
+        if x_prop >= 0.8 then 0. else adjustment *. (1. -. x_prop)
+      in
+
+      let new_min_time = cur_min_time +. left_adjustment in
+      let new_max_time = cur_max_time -. right_adjustment in
+      self#zoom_to new_min_time new_max_time
+
+    method zoom_in x_prop =
+      self#zoom_adjust x_prop scroll_zoom_factor
+
+    method zoom_out x_prop =
+      self#zoom_adjust x_prop (-. scroll_zoom_factor)
 
     val scale_bar_number_of_increments = 10
 
@@ -158,14 +203,30 @@ class timeline ~packing trace =
 
     val proc_chart_max_height = 30.
 
+    val mutable width = 0.
+
+    val mutable height = 0.
+
+    method chart_width () =
+      width *. 0.9
+
+    method chart_x_min () =
+      (width -. self#chart_width ()) *. 0.9
+
+    method chart_x_max () =
+      self#chart_x_min () +. self#chart_width ()
+
+    method clamp_x_to_chart x =
+      min (max x (self#chart_x_min ())) (self#chart_x_max ())
+
     method expose () =
       let cr = Cairo_gtk.create da#misc#window in
       let al = da#misc#allocation in
-      let width = float al.Gtk.width in
-      let height = float al.Gtk.height in
+      width <- float al.Gtk.width;
+      height <- float al.Gtk.height;
 
-      let chart_width = width *. 0.9 in
-      let chart_offset = (width -. chart_width) *. 0.9 in
+      let chart_width = self#chart_width () in
+      let chart_offset = self#chart_x_min () in
 
       (* Draw the scale bar *)
       Cairo.translate cr chart_offset 0.;
@@ -175,6 +236,7 @@ class timeline ~packing trace =
         ~increments_height:scale_bar_increments_height
         ~width:chart_width
         ~height:scale_bar_height
+        ~min_time
         ~cur_min_time
         ~cur_max_time
         cr;
@@ -197,10 +259,32 @@ class timeline ~packing trace =
       done;
       Cairo.identity_matrix cr;
 
+      flush stderr;
       ()
 
+    method scroll (s : GdkEvent.Scroll.t) =
+      let x_px = self#clamp_x_to_chart (GdkEvent.Scroll.x s) in
+      let x_relpos = (x_px -. self#chart_x_min ()) /. self#chart_width () in
+      Format.eprintf "SCROLL: %f %f %f %f@."
+        x_px
+        (self#chart_width ())
+        (x_px -. self#chart_x_min ())
+        x_relpos;
+      match GdkEvent.Scroll.direction s with
+      | `UP ->
+         self#zoom_in x_relpos
+      | `DOWN ->
+         self#zoom_out x_relpos
+      | _ ->
+         ()
+
     initializer
-    let callback _ = self#expose (); false in
-    ignore @@ da#event#connect#expose ~callback;
-    Printf.printf "Timelines initialized.\n"
+    let expose _ = self#expose (); false in
+    ignore @@ da#event#connect#expose ~callback:expose;
+    let scroll s = self#scroll s; false in
+    ignore @@ da#event#connect#scroll ~callback:scroll;
+    ignore @@ da#event#add [`SCROLL];
+    sw#set_hpolicy `AUTOMATIC;
+    sw#set_vpolicy `AUTOMATIC;
+    ()
   end
