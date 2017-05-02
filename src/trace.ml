@@ -8,6 +8,8 @@ type t =
 
 type proc_id = int
 
+let debug = ref false
+
 let tables db =
   results
     db
@@ -55,7 +57,12 @@ let number_of_processors { procs; _ } =
   Array.length procs
 
 let gc_periods_between ~min ~max ~proc { db; procs; } =
-  Printf.eprintf "Querying for GC activty in [%f,%f] on proc %d\n" min max proc;
+  if !debug then
+    Printf.eprintf
+      "Querying for GC activty in [%f,%f] on proc %d\n"
+      min
+      max
+      proc;
   let req =
     Printf.sprintf
       "
@@ -78,5 +85,5 @@ let gc_periods_between ~min ~max ~proc { db; procs; } =
       (Pair (Real, Real))
       req
   in
-  Printf.eprintf "=> Got %d GC periods\n" (List.length l);
+  if !debug then Printf.eprintf "=> Got %d GC periods\n" (List.length l);
   l

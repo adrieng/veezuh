@@ -12,17 +12,19 @@ let find_good_unit_prefix t =
   in
   let t, p = find t 0 in
   t, List.nth ["s"; "ms"; "us"; "ns"] p
-;;
 
 let rgba cr (r, g, b, a) =
   Cairo.set_source_rgba cr ~r ~g ~b ~a
+
+let rgb cr (r, g, b) =
+  Cairo.set_source_rgba cr ~r ~g ~b ~a:1.
 
 let black cr =
   Cairo.set_source_rgb cr 0. 0. 0.
 
 let gray_rect ~x ~y ~width ~height cr =
   Cairo.set_source_rgb cr 0.5 0.5 0.5;
-  Cairo.rectangle cr 0. 0. width height;
+  Cairo.rectangle cr x y width height;
   Cairo.fill cr;
   ()
 
@@ -144,6 +146,39 @@ let draw_processor_chart
   ()
 ;;
 
+let draw_selection
+      ?(color = (0., 0.2, 1.))
+      ?(alpha_interior = 0.3)
+      ~bar_thickness
+      ~height
+      ~x_start
+      ~x_stop
+      cr =
+  rgb cr color;
+
+  let draw_vertical_bar x =
+    Cairo.rectangle cr x 0. bar_thickness height;
+    Cairo.fill cr
+  in
+
+  let draw_intermediate_zone () =
+    let (r, g, b), a = color, alpha_interior in
+    let width = x_stop -. x_start in
+    Cairo.set_source_rgba cr ~r ~g ~b ~a:alpha_interior;
+    Cairo.rectangle cr x_start 0. width height;
+    Cairo.fill cr
+  in
+
+  draw_vertical_bar x_start;
+  if x_stop <> x_start then
+    begin
+      draw_vertical_bar x_stop;
+      draw_intermediate_zone ();
+    end;
+
+  ()
+;;
+
 class timeline ~packing trace =
   let pcount = Trace.number_of_processors trace in
 
@@ -159,6 +194,14 @@ class timeline ~packing trace =
     val mutable cur_min_time = min_time
 
     val mutable cur_max_time = max_time
+
+    val mutable cur_sel_start = min_time
+
+    val mutable cur_sel_stop = min_time
+
+    (* State-machine fields *)
+
+    val mutable selection_in_progress = false
 
     (* Appareance-related fields *)
 
@@ -178,11 +221,11 @@ class timeline ~packing trace =
 
     (* Methods computing appearance-related things *)
 
+    method chart_height () =
+      float pcount *. (proc_chart_height +. proc_chart_horizontal_spacing)
+
     method height () =
-      let per_processor_height =
-        proc_chart_height +. proc_chart_horizontal_spacing
-      in
-      scale_bar_height +. float pcount *. per_processor_height
+      scale_bar_height +. self#chart_height ()
 
     method width () =
       let al = sw#misc#allocation in
@@ -202,15 +245,35 @@ class timeline ~packing trace =
     method cur_time_span () =
       cur_max_time -. cur_min_time
 
-    method clamp_x_to_chart x =
+    method truncate_x_to_chart x =
       min (max x (self#chart_x_min ())) (self#chart_x_max ())
+
+    method truncate_time_to_cur_time_span t =
+      min (max t cur_min_time) cur_max_time
+
+    method time_to_chart_pos x =
+      let x = x -. cur_min_time in
+      (self#chart_width () /. self#cur_time_span ()) *. x
+
+    method absolute_pos_to_time x =
+      let x = x -. self#chart_x_min () in
+      cur_min_time +. (self#cur_time_span () /. self#chart_width ()) *. x
+
+    (* Methods for low-level access *)
+
+    method repaint () =
+      GtkBase.Widget.queue_draw da#as_widget
 
     (* Methods updating zoom level *)
 
     method zoom_to new_min_time new_max_time =
       cur_min_time <- max min_time new_min_time;
       cur_max_time <- min max_time new_max_time;
-      GtkBase.Widget.queue_draw da#as_widget
+      (* Truncate selection *)
+      self#set_sel_start cur_sel_start;
+      self#set_sel_stop cur_sel_stop;
+      (* Ask GTK to send an expose event *)
+      self#repaint ()
 
     method zoom_restore () =
       self#zoom_to min_time max_time
@@ -218,15 +281,15 @@ class timeline ~packing trace =
     method zoom_adjust x_prop zoom_factor =
       let adjustment = zoom_factor *. self#cur_time_span () in
 
-      let left_adjustment =
+      let start_adjustment =
         if x_prop <= 0.2 then 0. else adjustment *. x_prop
       in
-      let right_adjustment =
+      let stop_adjustment =
         if x_prop >= 0.8 then 0. else adjustment *. (1. -. x_prop)
       in
 
-      let new_min_time = cur_min_time +. left_adjustment in
-      let new_max_time = cur_max_time -. right_adjustment in
+      let new_min_time = cur_min_time +. start_adjustment in
+      let new_max_time = cur_max_time -. stop_adjustment in
       self#zoom_to new_min_time new_max_time
 
     method zoom_in x_prop =
@@ -235,21 +298,25 @@ class timeline ~packing trace =
     method zoom_out x_prop =
       self#zoom_adjust x_prop (-. scroll_zoom_factor)
 
+    (* Methods updating selection *)
+
+    method set_sel_start start =
+      cur_sel_start <- self#truncate_time_to_cur_time_span start
+
+    method set_sel_stop stop =
+      cur_sel_stop <- self#truncate_time_to_cur_time_span stop
+
     (* Event handlers *)
 
     method on_expose () =
       let cr = Cairo_gtk.create da#misc#window in
-      let width = self#width () in
-      let height = self#height () in
-
       let chart_width = self#chart_width () in
       let chart_offset = self#chart_x_min () in
 
-      (* Draw background *)
-      draw_background
-        ~width
-        ~height
-        cr;
+      let chart_matrix () =
+        Cairo.identity_matrix cr;
+        Cairo.translate cr chart_offset scale_bar_height;
+      in
 
       (* Draw the scale bar *)
       Cairo.translate cr chart_offset 0.;
@@ -264,8 +331,7 @@ class timeline ~packing trace =
         ~cur_max_time
         cr;
 
-      Cairo.identity_matrix cr;
-      Cairo.translate cr chart_offset scale_bar_height;
+      chart_matrix ();
 
       (* Draw each processor's chart *)
       for p = 0 to pcount - 1 do
@@ -282,6 +348,15 @@ class timeline ~packing trace =
       done;
       Cairo.identity_matrix cr;
 
+      chart_matrix ();
+
+      draw_selection
+        ~bar_thickness:2.
+        ~height:(self#chart_height ())
+        ~x_start:(self#time_to_chart_pos cur_sel_start)
+        ~x_stop:(self#time_to_chart_pos cur_sel_stop)
+        cr;
+
       flush stderr;
       ()
 
@@ -290,7 +365,7 @@ class timeline ~packing trace =
       let modifiers = Gdk.Convert.modifier state in
       if List.mem `CONTROL modifiers
       then
-        let x_px = self#clamp_x_to_chart (GdkEvent.Scroll.x e) in
+        let x_px = self#truncate_x_to_chart (GdkEvent.Scroll.x e) in
         let x_relpos = (x_px -. self#chart_x_min ()) /. self#chart_width () in
         match GdkEvent.Scroll.direction e with
         | `UP ->
@@ -306,10 +381,31 @@ class timeline ~packing trace =
       da#misc#set_size_request ~width ~height ();
       ()
 
-    method on_click e =
+    method on_click pressed e =
       let x = GdkEvent.Button.x e in
-      let y = GdkEvent.Button.y e in
-      Format.eprintf "CLICK %f %f@." x y;
+      let x_time = self#absolute_pos_to_time x in
+      let button = GdkEvent.Button.button e in
+      if button = 1 then
+        begin
+          if pressed then
+            begin
+              self#set_sel_start x_time;
+              self#set_sel_stop x_time
+            end;
+          selection_in_progress <- not selection_in_progress;
+          self#repaint ()
+        end;
+      ()
+
+    method on_mouse_motion e =
+      let x = GdkEvent.Motion.x e in
+      let x_time = self#absolute_pos_to_time x in
+      if selection_in_progress
+      then
+        begin
+          self#set_sel_stop x_time;
+          self#repaint ()
+        end;
       ()
 
     (* Initialization code *)
@@ -325,8 +421,18 @@ class timeline ~packing trace =
     (* Scroll and click events *)
     let scroll e = self#on_scroll e; false in
     ignore @@ da#event#connect#scroll ~callback:scroll;
-    let click e = self#on_click e; false in
-    ignore @@ da#event#connect#button_press ~callback:click;
-    ignore @@ da#event#add [`SCROLL; `BUTTON_PRESS];
+    let click pressed e = self#on_click pressed e; false in
+    ignore @@ da#event#connect#button_press ~callback:(click true);
+    ignore @@ da#event#connect#button_release ~callback:(click false);
+    let motion e = self#on_mouse_motion e; false in
+    ignore @@ da#event#connect#motion_notify ~callback:motion;
+    ignore @@
+      da#event#add
+        [
+          `SCROLL;
+          `BUTTON_PRESS;
+          `BUTTON_RELEASE;
+          `POINTER_MOTION;
+        ];
     ()
   end
