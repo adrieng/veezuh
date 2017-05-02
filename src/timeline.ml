@@ -160,10 +160,52 @@ class timeline ~packing trace =
 
     val mutable cur_max_time = max_time
 
+    (* Appareance-related fields *)
+
+    val scroll_zoom_factor = 0.05
+
+    val scale_bar_number_of_increments = 10
+
+    val scale_bar_thickness = 1.
+
+    val scale_bar_increments_height = 4.
+
+    val scale_bar_height = 20.
+
+    val proc_chart_horizontal_spacing = 2.
+
+    val proc_chart_height = 30.
+
+    (* Methods computing appearance-related things *)
+
+    method height () =
+      let per_processor_height =
+        proc_chart_height +. proc_chart_horizontal_spacing
+      in
+      scale_bar_height +. float pcount *. per_processor_height
+
+    method width () =
+      let al = sw#misc#allocation in
+      float (al.Gtk.width - 10)
+
+    method chart_width () =
+      self#width () *. 0.9
+
+    method chart_x_min () =
+      (self#width () -. self#chart_width ()) *. 0.9
+
+    method chart_x_max () =
+      self#chart_x_min () +. self#chart_width ()
+
+    (* Methods computing time-related things *)
+
     method cur_time_span () =
       cur_max_time -. cur_min_time
 
-    val scroll_zoom_factor = 0.05
+    method clamp_x_to_chart x =
+      min (max x (self#chart_x_min ())) (self#chart_x_max ())
+
+    (* Methods updating zoom level *)
 
     method zoom_to new_min_time new_max_time =
       cur_min_time <- max min_time new_min_time;
@@ -193,49 +235,12 @@ class timeline ~packing trace =
     method zoom_out x_prop =
       self#zoom_adjust x_prop (-. scroll_zoom_factor)
 
-    val scale_bar_number_of_increments = 10
-
-    val scale_bar_thickness = 1.
-
-    val scale_bar_increments_height = 4.
-
-    val scale_bar_height = 20.
-
-    val proc_chart_horizontal_spacing = 2.
-
-    val proc_chart_height = 30.
-
-    val mutable width = 0.
-
-    val mutable height = 0.
-
-    method height () =
-      let per_processor_height =
-        proc_chart_height +. proc_chart_horizontal_spacing
-      in
-      scale_bar_height +. float pcount *. per_processor_height
-
-    method chart_width () =
-      width *. 0.9
-
-    method chart_x_min () =
-      (width -. self#chart_width ()) *. 0.9
-
-    method chart_x_max () =
-      self#chart_x_min () +. self#chart_width ()
-
-    method clamp_x_to_chart x =
-      min (max x (self#chart_x_min ())) (self#chart_x_max ())
-
-    method width () =
-      let al = sw#misc#allocation in
-      float (al.Gtk.width - 10)
+    (* Event handlers *)
 
     method on_expose () =
       let cr = Cairo_gtk.create da#misc#window in
-      let al = da#misc#allocation in
-      width <- float al.Gtk.width;
-      height <- float al.Gtk.height;
+      let width = self#width () in
+      let height = self#height () in
 
       let chart_width = self#chart_width () in
       let chart_offset = self#chart_x_min () in
@@ -306,6 +311,8 @@ class timeline ~packing trace =
       let y = GdkEvent.Button.y e in
       Format.eprintf "CLICK %f %f@." x y;
       ()
+
+    (* Initialization code *)
 
     initializer
     sw#set_hpolicy `AUTOMATIC;
