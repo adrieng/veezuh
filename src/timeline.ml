@@ -6,13 +6,12 @@ let pi2 = 2. *. pi
 let find_good_unit_prefix t =
   assert (t >= 0.);
   let rec find t p =
-    if p <= -3 || p >= 2 then t, p
-    else if t <= 1. then find (t *. 1000.) (p - 1)
-    else if t >= 60. then find (t /. 60.) (p + 1)
+    if p >= 3 then t, p
+    else if t < 0.01 then find (t *. 1000.) (p + 1)
     else t, p
   in
   let t, p = find t 0 in
-  t, List.nth ["ns"; "us"; "ms"; "s"; "m"; "h"] (p + 3)
+  t, List.nth ["s"; "ms"; "us"; "ns"] p
 ;;
 
 let rgba cr (r, g, b, a) =
