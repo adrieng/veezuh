@@ -27,8 +27,11 @@ let main trace =
   ignore @@ factory#add_item "Quit" ~key:GdkKeysyms._Q ~callback:Main.quit;
   window#add_accel_group accel_group;
 
+  (* Lable *)
+  ignore @@ GMisc.label ~markup:"<b><u>Timeline</u></b>" ~packing:vbox#pack ();
+
   (* Timeline *)
-  let _ = new timelines ~packing:vbox#add trace in
+  let _ = new timeline ~packing:(vbox#pack ~expand:true) trace in
 
   (* Display the windows and enter Gtk+ main loop *)
   window#show ();
@@ -40,11 +43,4 @@ let () =
     then "./datasets/fib.opt.12631.sqlite"
     else Sys.argv.(1)
   in
-  let trace = Trace.from_sqlite_file fn in
-  let start, finish = Trace.time_range trace in
-  Format.printf "Start: %f, Finish: %f, %d processors@."
-    start
-    finish
-    (Trace.number_of_processors trace)
-  ;
-  main trace
+  main @@ Trace.from_sqlite_file fn
