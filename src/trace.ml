@@ -39,7 +39,11 @@ let from_sqlite_file filename =
   if not @@ List.mem "events" tables
   then failwith (filename ^ ": missing event table");
 
-  { db = db; procs = processor_ids db; }
+  let procs = processor_ids db in
+  if Array.length procs = 0
+  then failwith (filename ^ ": no events");
+
+  { db; procs; }
 
 let time_range { db; _ } =
   result
