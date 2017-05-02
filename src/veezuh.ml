@@ -35,9 +35,14 @@ let main filename trace =
   let factory = new GMenu.factory view_menu ~accel_group in
   ignore @@
     factory#add_item
-      "Reload"
+      "Zoom to default"
       ~key:GdkKeysyms._R
-      ~callback:(fun _ -> tl#zoom_restore ());
+      ~callback:(fun _ -> tl#zoom_to_default ());
+  ignore @@
+    factory#add_item
+      "Zoom to selection"
+      ~key:GdkKeysyms._V
+      ~callback:(fun _ -> tl#zoom_to_selection ());
   window#add_accel_group accel_group;
 
   (* Display the windows and enter Gtk+ main loop *)
