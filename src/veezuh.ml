@@ -9,12 +9,13 @@ let height = 600
 
 let events =
   [
-    "Thread copying", "THREAD_COPY", (0.2, 0.3, 0.1, 0.8);
+    "Thread copying", "THREAD_COPY", (0.2, 0.3, 0.1, 0.8), GdkKeysyms._T;
+    "GC aborts", "GC_ABORT", (0.6, 0.05, 0.1, 0.8), GdkKeysyms._A;
   ]
 
 let create_event_check_buttons tl (f : GMenu.menu GMenu.factory) =
-  let create_event_check_button (label, event_name, color) =
-    let cb = f#add_check_item ~key:GdkKeysyms._T label in
+  let create_event_check_button (label, event_name, color, key) =
+    let cb = f#add_check_item ~key label in
     let callback () = tl#toggle_kind event_name color in
     ignore @@ cb#connect#toggled ~callback
   in
