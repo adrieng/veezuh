@@ -14,7 +14,7 @@ let events =
 
 let create_event_check_buttons tl (f : GMenu.menu GMenu.factory) =
   let create_event_check_button (label, event_name, color) =
-    let cb = f#add_check_item ~key:GdkKeysyms._T "Thread creation" in
+    let cb = f#add_check_item ~key:GdkKeysyms._T label in
     let callback () = tl#toggle_kind event_name color in
     ignore @@ cb#connect#toggled ~callback
   in
