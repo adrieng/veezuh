@@ -56,10 +56,10 @@ let time_range { db; _ } =
 let number_of_processors { procs; _ } =
   Array.length procs
 
-let gc_periods_between ~min ~max ~proc { db; procs; } =
+let gc_periods_between ~min ~max ~min_duration ~proc { db; procs; } =
   if !debug then
     Printf.eprintf
-      "Querying for GC activty in [%f,%f] on proc %d\n"
+      "Querying for GC activity in [%f,%f] on proc %d\n"
       min
       max
       proc;
@@ -70,7 +70,7 @@ let gc_periods_between ~min ~max ~proc { db; procs; } =
        FROM events e JOIN events l
        WHERE e.kind = \"GC_ENTER\" AND l.kind = \"GC_LEAVE\"
        AND e.argptr = l.argptr AND e.argptr = %d AND e.time < l.time
-       AND %f <= e.time AND l.time <= %f
+       AND %f <= e.time AND l.time <= %f AND l.time - e.time >= %f
        AND NOT EXISTS
        (SELECT * FROM events b
         WHERE b.kind = \"GC_LEAVE\" AND e.time < b.time
@@ -78,6 +78,7 @@ let gc_periods_between ~min ~max ~proc { db; procs; } =
       (procs.(proc))
       min
       max
+      min_duration
   in
   let l =
     results

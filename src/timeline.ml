@@ -142,6 +142,7 @@ let draw_processor_chart
     Trace.gc_periods_between
       ~min:cur_min_time
       ~max:cur_max_time
+      ~min_duration:0.000000001
       ~proc:processor
       trace
   in
