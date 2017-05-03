@@ -360,10 +360,13 @@ class timeline ~packing trace =
       self#zoom_to min_time max_time
 
     method zoom_to_selection () =
-      let left = min cur_sel_start cur_sel_stop in
-      let right = max cur_sel_start cur_sel_stop in
-      self#zoom_to left right;
-      self#reset_selection ();
+      if cur_sel_start <> cur_sel_stop then
+        begin
+          let left = min cur_sel_start cur_sel_stop in
+          let right = max cur_sel_start cur_sel_stop in
+          self#zoom_to left right;
+          self#reset_selection ();
+        end;
       ()
 
     (* Methods updating selection *)
