@@ -179,6 +179,45 @@ let draw_selection
   ()
 ;;
 
+let draw_events_of_kinds
+      ~mark_thickness
+      ~mark_radius
+      ~height
+      ~width
+      ~cur_min_time
+      ~cur_max_time
+      ~processor
+      ~kinds
+      ~trace
+      cr =
+  let draw_events_of_kind (kind, color) =
+    let events =
+      Trace.events_between
+        ~min:cur_min_time
+        ~max:cur_max_time
+        ~proc:processor
+        ~kind
+        trace
+    in
+
+    (* TODO factor out *)
+    let x_ratio = width /. (cur_max_time -. cur_min_time) in
+
+    rgba cr color;
+
+    let draw_event_mark t =
+      let x = (t -. cur_min_time) *. x_ratio in
+      Cairo.arc cr ~x ~y:0. ~r:mark_radius ~a1:0. ~a2:pi2;
+      Cairo.rectangle cr ~x ~y:0. ~w:mark_thickness ~h:height;
+      Cairo.arc cr ~x ~y:height ~r:mark_radius ~a1:0. ~a2:pi2;
+      Cairo.fill cr
+    in
+
+    List.iter draw_event_mark events
+  in
+  List.iter draw_events_of_kind kinds
+;;
+
 class timeline ~packing trace =
   let pcount = Trace.number_of_processors trace in
 
@@ -191,6 +230,8 @@ class timeline ~packing trace =
   object (self)
     inherit GObj.widget da#as_widget
 
+    (* Time-related fields *)
+
     val mutable cur_min_time = min_time
 
     val mutable cur_max_time = max_time
@@ -198,6 +239,11 @@ class timeline ~packing trace =
     val mutable cur_sel_start = min_time
 
     val mutable cur_sel_stop = min_time
+
+    (* Trace event-related fields *)
+
+    (* Which event kinds to print *)
+    val mutable cur_selected_kinds = []
 
     (* State-machine fields *)
 
@@ -218,6 +264,12 @@ class timeline ~packing trace =
     val proc_chart_horizontal_spacing = 2.
 
     val proc_chart_height = 30.
+
+    val event_bar_thickness = 1.
+
+    val event_mark_thickness = 2.
+
+    val event_mark_radius = 2.
 
     (* Methods computing appearance-related things *)
 
@@ -318,6 +370,17 @@ class timeline ~packing trace =
       cur_sel_stop <- cur_min_time;
       self#repaint ()
 
+    (* Methods updating selection *)
+
+    method toggle_kind event_kind color =
+      if List.mem_assoc event_kind cur_selected_kinds
+      then
+        cur_selected_kinds <- List.remove_assoc event_kind cur_selected_kinds
+      else
+        cur_selected_kinds <- (event_kind, color) :: cur_selected_kinds;
+      self#repaint ();
+      ()
+
     (* Event handlers *)
 
     method on_expose () =
@@ -356,6 +419,17 @@ class timeline ~packing trace =
           ~processor:p
           ~trace
           cr;
+        draw_events_of_kinds
+          ~mark_thickness:event_mark_thickness
+          ~mark_radius:event_mark_radius
+          ~width:chart_width
+          ~height:proc_chart_height
+          ~cur_min_time
+          ~cur_max_time
+          ~processor:p
+          ~kinds:cur_selected_kinds
+          ~trace
+          cr;
         Cairo.translate ~x:0. ~y:proc_chart_height cr
       done;
       Cairo.identity_matrix cr;
@@ -363,7 +437,7 @@ class timeline ~packing trace =
       chart_matrix ();
 
       draw_selection
-        ~bar_thickness:2.
+        ~bar_thickness:event_bar_thickness
         ~height:(self#chart_height ())
         ~x_start:(self#time_to_chart_pos cur_sel_start)
         ~x_stop:(self#time_to_chart_pos cur_sel_stop)

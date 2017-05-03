@@ -87,3 +87,17 @@ let gc_periods_between ~min ~max ~proc { db; procs; } =
   in
   if !debug then Printf.eprintf "=> Got %d GC periods\n" (List.length l);
   l
+
+let events_between ~min ~max ~proc ~kind { db; procs; } =
+  let req =
+    Printf.sprintf
+      "
+       SELECT time
+       FROM events
+       WHERE kind = \"%s\" AND %f <= time AND time <= %f AND argptr = %d;"
+      kind
+      min
+      max
+      procs.(proc)
+  in
+  results db Real req
