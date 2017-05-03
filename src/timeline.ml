@@ -3,15 +3,14 @@ open Cairo
 let pi = 4. *. atan 1.
 let pi2 = 2. *. pi
 
-let find_good_unit_prefix t =
-  assert (t >= 0.);
+let find_good_unit_scaling t =
   let rec find t p =
     if p >= 3 then t, p
     else if t < 0.01 then find (t *. 1000.) (p + 1)
     else t, p
   in
-  let t, p = find t 0 in
-  t, List.nth ["s"; "ms"; "us"; "ns"] p
+  let _, p = find t 0 in
+  1000. ** float p, List.nth ["s"; "ms"; "us"; "ns"] p
 
 let rgba cr (r, g, b, a) =
   Cairo.set_source_rgba cr ~r ~g ~b ~a
@@ -78,12 +77,14 @@ let draw_scale_bar
     Cairo.stroke cr;
   in
 
+  let t_scale, pref = find_good_unit_scaling time_per_increment in
+
   Cairo.set_line_width cr 1.;
   for i = 0 to number_of_increments - 1 do
     let x = float i *. pixels_per_increment in
     (* Draw small label *)
     let x_time = float i *. time_per_increment +. cur_min_time -. min_time in
-    let x_time, pref = find_good_unit_prefix x_time in
+    let x_time = x_time *. t_scale in
     let label = Printf.sprintf "%.2f %s" x_time pref in
     draw_increment ~label x;
   done;
