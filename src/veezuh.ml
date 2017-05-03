@@ -38,31 +38,32 @@ let open_trace_window filename =
 
   (* Menu bar *)
   let menubar = GMenu.menu_bar ~packing:vbox#pack () in
-  let factory = new GMenu.factory menubar in
-  let accel_group = factory#accel_group in
-  let file_menu = factory#add_submenu "File" in
-  let view_menu = factory#add_submenu "View" in
+  let menu_factory = new GMenu.factory menubar in
+  let accel_group = menu_factory#accel_group in
 
   (* File menu *)
-  let factory = new GMenu.factory file_menu ~accel_group in
-  ignore @@ factory#add_item "Quit" ~key:GdkKeysyms._Q ~callback:Main.quit;
+  let file_menu = menu_factory#add_submenu "File" in
+  let file_factory = new GMenu.factory file_menu ~accel_group in
+  ignore @@ file_factory#add_item "Quit" ~key:GdkKeysyms._Q ~callback:Main.quit;
 
   let tl = create_timeline vbox trace in
 
   (* View menu *)
-  let factory = new GMenu.factory view_menu ~accel_group in
+  let view_menu = menu_factory#add_submenu "View" in
+  let view_factory = new GMenu.factory view_menu ~accel_group in
   ignore @@
-    factory#add_item
+    view_factory#add_item
       "Zoom to default"
       ~key:GdkKeysyms._R
       ~callback:(fun _ -> tl#zoom_to_default ());
   ignore @@
-    factory#add_item
+    view_factory#add_item
       "Zoom to selection"
       ~key:GdkKeysyms._E
       ~callback:(fun _ -> tl#zoom_to_selection ());
-
-  create_event_check_buttons tl factory;
+  let event_submenu = view_factory#add_submenu "Events" in
+  let event_factory = new GMenu.factory event_submenu ~accel_group in
+  create_event_check_buttons tl event_factory;
 
   window#add_accel_group accel_group;
 
