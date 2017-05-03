@@ -13,4 +13,4 @@ uninstall: all
 	jbuilder uninstall
 
 run: all
-	./_build/default/src/veezuh.exe ./datasets/fib.opt.4proc-std.sqlite
+	./_build/default/src/veezuh.exe ./datasets/fib.32.4proc.std.sqlite

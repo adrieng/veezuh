@@ -28,6 +28,9 @@ let gray_rect ~x ~y ~width ~height cr =
   Cairo.fill cr;
   ()
 
+let middle x1 x2 =
+  (x1 +. x2) /. 2.
+
 let draw_background
       ~width
       ~height
@@ -202,14 +205,20 @@ let draw_events_of_kinds
 
     (* TODO factor out *)
     let x_ratio = width /. (cur_max_time -. cur_min_time) in
+    let pos_of_time t = (t -. cur_min_time) *. x_ratio in
 
     rgba cr color;
 
     let draw_event_mark t =
-      let x = (t -. cur_min_time) *. x_ratio in
-      Cairo.arc cr ~x ~y:0. ~r:mark_radius ~a1:0. ~a2:pi2;
+      let x = pos_of_time t in
+      let draw_bullet y =
+        let x = middle x (x +. mark_radius) in
+        Cairo.arc cr ~x ~y ~r:mark_radius ~a1:0. ~a2:pi2
+      in
+
       Cairo.rectangle cr ~x ~y:0. ~w:mark_thickness ~h:height;
-      Cairo.arc cr ~x ~y:height ~r:mark_radius ~a1:0. ~a2:pi2;
+      draw_bullet 0.;
+      draw_bullet height;
       Cairo.fill cr
     in
 
