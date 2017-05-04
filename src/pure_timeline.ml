@@ -199,16 +199,18 @@ let selection_right_side tl u =
 
 (* Low-level Gtk+ stuff *)
 
-let setup_scrollbars tl =
+let configure_scrollbars tl =
+  (* Horizontal scrollbar *)
   tl.hsc#adjustment#set_lower tl.global_span.l;
   tl.hsc#adjustment#set_upper tl.global_span.u;
   tl.hsc#adjustment#set_value tl.current_span.l;
   tl.hsc#adjustment#set_page_size (Time.range tl.current_span);
   tl.hsc#adjustment#set_step_increment (time_per_increment tl);
+  (* Vertical scrollbar *)
   ()
 
 let redraw tl =
-  setup_scrollbars tl;
+  configure_scrollbars tl;
   GtkBase.Widget.queue_draw tl.da#as_widget
 
 (* High-level drawing functions *)
@@ -439,6 +441,10 @@ let expose tl _ =
   draw_timeline tl @@ Cairo_gtk.create tl.da#misc#window;
   false
 
+let configure tl _ =
+  configure_scrollbars tl;
+  false
+
 let scrollbar_value_changed tl () =
   let l = tl.hsc#adjustment#value in
   let u = l +. Time.range tl.current_span in
@@ -548,6 +554,7 @@ let make
       hsc;
     }
   in
+  ignore @@ da#event#connect#configure ~callback:(configure tl);
   ignore @@ da#event#connect#expose ~callback:(expose tl);
   ignore @@ da#event#connect#button_press ~callback:(click tl true);
   ignore @@ da#event#connect#button_release ~callback:(click tl false);
