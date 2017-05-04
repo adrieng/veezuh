@@ -204,6 +204,7 @@ let setup_scrollbars tl =
   tl.hsc#adjustment#set_upper tl.global_span.u;
   tl.hsc#adjustment#set_value tl.current_span.l;
   tl.hsc#adjustment#set_page_size (Time.range tl.current_span);
+  tl.hsc#adjustment#set_step_increment (time_per_increment tl);
   ()
 
 let redraw tl =
