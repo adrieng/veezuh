@@ -185,8 +185,8 @@ let draw_event_on_processor ~p tl cr t =
     Cairo.arc cr ~x ~y ~r:tl.event_mark_radius ~a1:0. ~a2:pi2
   in
 
-  draw_bullet y;
-  draw_bullet (y +. h);
+  draw_bullet (y +. tl.event_mark_radius);
+  draw_bullet (y +. h -. tl.event_mark_radius);
   Cairo.rectangle cr ~x ~y ~w:tl.event_mark_thickness ~h;
   Cairo.fill cr
 
