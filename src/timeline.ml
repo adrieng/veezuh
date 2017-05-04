@@ -97,7 +97,7 @@ let draw_processor_chart
   let total_time = cur_max_time -. cur_min_time in
   let x_ratio = width /. total_time in
 
-  let draw_gc_period { Time.l = start; Time.u = stop; } =
+  let draw_gc_period { Range.l = start; Range.u = stop; } =
     (* start and stop are in absolute time, we have to translate them first to
        local time, then to x coordinates. *)
     let l_start = start -. cur_min_time in
@@ -111,7 +111,7 @@ let draw_processor_chart
 
   let gc_periods =
     Trace.gc_periods_between
-      ~between:Time.{ l = cur_min_time; u = cur_max_time; }
+      ~between:Range.{ l = cur_min_time; u = cur_max_time; }
       ~min_duration:0.000000001
       ~proc:processor
       trace
@@ -168,7 +168,7 @@ let draw_events_of_kinds
   let draw_events_of_kind (kind, color) =
     let events =
       Trace.events_between
-        ~between:Time.{ l = cur_min_time; u = cur_max_time; }
+        ~between:Range.{ l = cur_min_time; u = cur_max_time; }
         ~proc:processor
         ~kind
         trace
@@ -201,7 +201,7 @@ let draw_events_of_kinds
 class timeline ~packing trace =
   let pcount = Trace.number_of_processors trace in
 
-  let { Time.l = min_time; Time.u = max_time; } = Trace.epoch trace in
+  let { Range.l = min_time; Range.u = max_time; } = Trace.epoch trace in
 
   let sw = GBin.scrolled_window ~packing:packing () in
 

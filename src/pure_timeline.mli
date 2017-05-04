@@ -11,22 +11,22 @@ type processor = int
 type get_activities_callback =
   kind:activity_kind ->
   for_proc:processor ->
-  between:Time.span ->
-  min_duration:Time.time ->
-  Time.span list
+  between:Range.span ->
+  min_duration:Range.time ->
+  Range.span list
 
 type get_events_callback =
   kind:event_kind ->
   for_proc:processor ->
-  between:Time.span ->
-  Time.time list
+  between:Range.span ->
+  Range.time list
 
 (* The Timeline control *)
 
 type t
 
 val make :
-  global_epoch:Time.span ->
+  global_epoch:Range.span ->
   number_of_processors:int ->
   get_activities:get_activities_callback ->
   get_events:get_events_callback ->

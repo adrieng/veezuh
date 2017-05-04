@@ -1,5 +1,5 @@
-open Time
 open Utils
+open Range
 
 (* Activities and Events *)
 
@@ -14,15 +14,15 @@ type processor = int
 type get_activities_callback =
   kind:activity_kind ->
   for_proc:processor ->
-  between:Time.span ->
-  min_duration:Time.time ->
-  Time.span list
+  between:span ->
+  min_duration:float ->
+  Range.span list
 
 type get_events_callback =
   kind:event_kind ->
   for_proc:processor ->
-  between:Time.span ->
-  time list
+  between:span ->
+  float list
 
 (* The Timeline control *)
 
@@ -46,13 +46,13 @@ type t =
 
     (* Time parameters *)
 
-    global_epoch : Time.span;
+    global_epoch : Range.span;
 
-    mutable current_epoch : Time.span;
+    mutable current_epoch : Range.span;
 
     (* Selection parameters *)
 
-    mutable current_selection : Time.span option;
+    mutable current_selection : Range.span option;
 
     mutable selection_in_progress : bool;
 
@@ -139,13 +139,13 @@ let chart_dim tl =
 (* Conversion functions between time and graphical space *)
 
 let time_per_pixel tl =
-  Time.range tl.current_epoch /. chart_width tl
+  Range.range tl.current_epoch /. chart_width tl
 
 let time_per_increment tl =
-  Time.range tl.current_epoch /. float tl.scale_bar_number_of_increments
+  Range.range tl.current_epoch /. float tl.scale_bar_number_of_increments
 
 let pixels_per_time tl =
-  chart_width tl /. Time.range tl.current_epoch
+  chart_width tl /. Range.range tl.current_epoch
 
 let pixels_per_increment tl =
   chart_width tl /. float tl.scale_bar_number_of_increments
@@ -160,7 +160,7 @@ let raw_time_of_drawing_pos tl x =
   tl.current_epoch.l +. local_time_of_drawing_pos tl x
 
 let drawing_pos_of_time tl t =
-  let t = Time.truncate tl.current_epoch t in
+  let t = Range.truncate tl.current_epoch t in
   chart_left tl +. pixels_per_time tl *. (t -. tl.current_epoch.l)
 
 (* Derived graphical parameters *)
@@ -210,7 +210,7 @@ let configure_scrollbars tl =
   tl.hsc#adjustment#set_lower tl.global_epoch.l;
   tl.hsc#adjustment#set_upper tl.global_epoch.u;
   tl.hsc#adjustment#set_value tl.current_epoch.l;
-  tl.hsc#adjustment#set_page_size (Time.range tl.current_epoch);
+  tl.hsc#adjustment#set_page_size (Range.range tl.current_epoch);
   tl.hsc#adjustment#set_step_increment (time_per_increment tl);
   ()
 
@@ -452,7 +452,7 @@ let configure tl _ =
 
 let scrollbar_value_changed tl () =
   let l = tl.hsc#adjustment#value in
-  let u = l +. Time.range tl.current_epoch in
+  let u = l +. Range.range tl.current_epoch in
   tl.current_epoch <- { l; u; };
   redraw tl;
   ()
