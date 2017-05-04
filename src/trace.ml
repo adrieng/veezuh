@@ -54,7 +54,7 @@ let epoch { db; _ } =
       (Pair (Real, Real))
       "SELECT MIN(time), MAX(time) FROM events;"
   in
-  Time.{ l; u; }
+  Range.{ l; u; }
 
 let number_of_processors { procs; _ } =
   Array.length procs
@@ -63,8 +63,8 @@ let gc_periods_between ~between ~min_duration ~proc { db; procs; } =
   if !debug then
     Printf.eprintf
       "Querying for GC activity in [%f,%f] on proc %d\n"
-      between.Time.l
-      between.Time.u
+      between.Range.l
+      between.Range.u
       proc;
   let req =
     Printf.sprintf
@@ -79,8 +79,8 @@ let gc_periods_between ~between ~min_duration ~proc { db; procs; } =
         WHERE b.kind = \"GC_LEAVE\" AND e.time < b.time
         AND b.time < l.time);"
       (procs.(proc))
-      between.Time.l
-      between.Time.u
+      between.Range.l
+      between.Range.u
       min_duration
   in
   let l =
@@ -90,15 +90,15 @@ let gc_periods_between ~between ~min_duration ~proc { db; procs; } =
       req
   in
   if !debug then Printf.eprintf "=> Got %d GC periods\n" (List.length l);
-  List.map (fun (l, u) -> Time.{ l; u; }) l
+  List.map (fun (l, u) -> Range.{ l; u; }) l
 
 let activities_between ~kind ~between ~min_duration ~proc { db; procs; } =
   if !debug then
     Printf.eprintf
       "Querying for activity %s in [%f,%f] on proc %d\n"
       kind
-      between.Time.l
-      between.Time.u
+      between.Range.l
+      between.Range.u
       proc;
   let req =
     Printf.sprintf
@@ -114,8 +114,8 @@ let activities_between ~kind ~between ~min_duration ~proc { db; procs; } =
         AND b.time < l.time);"
       kind kind
       (procs.(proc))
-      between.Time.l
-      between.Time.u
+      between.Range.l
+      between.Range.u
       min_duration
   in
   let l =
@@ -125,7 +125,7 @@ let activities_between ~kind ~between ~min_duration ~proc { db; procs; } =
       req
   in
   if !debug then Printf.eprintf "=> Got %d activities\n" (List.length l);
-  List.map (fun (l, u) -> Time.{ l; u; }) l
+  List.map (fun (l, u) -> Range.{ l; u; }) l
 
 let events_between ~between ~proc ~kind { db; procs; } =
   let req =
@@ -135,8 +135,8 @@ let events_between ~between ~proc ~kind { db; procs; } =
        FROM events
        WHERE kind = \"%s\" AND %f <= time AND time <= %f AND argptr = %d;"
       kind
-      between.Time.l
-      between.Time.u
+      between.Range.l
+      between.Range.u
       procs.(proc)
   in
   results db Real req
