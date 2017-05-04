@@ -9,11 +9,6 @@ type event_kind = string
 
 type processor = int
 
-(* Selection *)
-
-let default_selection s =
-  { l = s.l; u = s.l; }
-
 (* Callbacks *)
 
 type get_activities_callback =
@@ -45,7 +40,7 @@ type t =
 
     (* Selection parameters *)
 
-    mutable current_selection : Time.span;
+    mutable current_selection : Time.span option;
 
     mutable selection_in_progress : bool;
 
@@ -55,9 +50,13 @@ type t =
 
     color_background : Utils.rgb;
 
+    color_selection : Utils.rgba;
+
     color_proc_active : Utils.rgba;
 
     scroll_zoom_factor : float;
+
+    alpha_selection : float;
 
     scale_bar_number_of_increments : int;
 
@@ -120,7 +119,7 @@ let chart_width tl =
   width tl -. chart_left tl
 
 let chart_height tl =
-  height tl
+  height tl -. chart_top tl
 
 let chart_dim tl =
   chart_width tl, chart_height tl
@@ -142,6 +141,9 @@ let pixels_per_increment tl =
 let relative_time_of_timeline_pos tl x =
   time_per_pixel tl *. (x -. chart_left tl)
 
+let absolute_time_of_timeline_pos tl x =
+  tl.current_span.l +. relative_time_of_timeline_pos tl x
+
 let position_of_increment tl i =
   chart_left tl +. pixels_per_increment tl *. float i
 
@@ -160,6 +162,21 @@ let y_pos_of_processor_label tl p =
 let absolute_pos_of_time tl t =
   let t = Time.truncate tl.current_span t in
   chart_left tl +. pixels_per_time tl *. (t -. tl.current_span.l)
+
+(* Selection-related things *)
+
+let selection_reset tl =
+  tl.current_selection <- None
+
+let selection_discrete tl t =
+  tl.current_selection <- Some { l = t; u = t; }
+
+let selection_right_side tl u =
+  match tl.current_selection with
+  | None ->
+     selection_discrete tl u
+  | Some { l; _ } ->
+     tl.current_selection <- Some { l; u; }
 
 (* High-level drawing functions *)
 
@@ -315,19 +332,81 @@ let draw_processor_chart tl cr =
   done;
   ()
 
+let draw_selection tl cr =
+  match tl.current_selection with
+  | None ->
+     ()
+  | Some s ->
+     set_rgba cr tl.color_selection;
+
+     let x_l = absolute_pos_of_time tl s.l in
+     let x_u = absolute_pos_of_time tl s.u in
+     let y = chart_top tl in
+     let h = chart_height tl in
+
+     let draw_vertical_bar x =
+       Cairo.rectangle
+         cr
+         ~x
+         ~y
+         ~w:tl.selection_bar_thickness
+         ~h;
+       Cairo.fill cr
+     in
+
+     let draw_intermediate_zone () =
+       let r, g, b, _ = tl.color_selection in
+       let w = x_u -. x_l in
+       Cairo.set_source_rgba cr ~r ~g ~b ~a:tl.alpha_selection;
+       Cairo.rectangle cr ~x:x_l ~y ~w ~h;
+       Cairo.fill cr
+     in
+
+     draw_vertical_bar x_l;
+     if x_l <> x_u then
+       begin
+         draw_vertical_bar x_u;
+         draw_intermediate_zone ();
+       end;
+     ()
+;;
+
+let draw_timeline tl cr =
+  draw_background tl cr;
+  draw_scale_bar tl cr;
+  draw_legend tl cr;
+  draw_processor_chart tl cr;
+  draw_selection tl cr;
+  ()
+;;
+
 (* Gtk callbacks *)
 
+let click tl pressed e =
+  let x = GdkEvent.Button.x e in
+  let t = absolute_time_of_timeline_pos tl x in
+  let button = GdkEvent.Button.button e in
+  if button = 1 then
+    begin
+      if pressed then selection_discrete tl t;
+      tl.selection_in_progress <- not tl.selection_in_progress;
+      redraw tl;
+    end;
+  false
+
+let move tl e =
+  let x = GdkEvent.Motion.x e in
+  let u = absolute_time_of_timeline_pos tl x in
+  if tl.selection_in_progress
+  then
+    begin
+      selection_right_side tl u;
+      redraw tl
+    end;
+  false
+
 let expose tl _ =
-  let cr = Cairo_gtk.create tl.da#misc#window in
-
-  draw_background tl cr;
-
-  draw_scale_bar tl cr;
-
-  draw_legend tl cr;
-
-  draw_processor_chart tl cr;
-
+  draw_timeline tl @@ Cairo_gtk.create tl.da#misc#window;
   false
 
 (* Construction function *)
@@ -353,7 +432,9 @@ let make
 
   let left_margin = 100 in
   let color_background = Utils.white_rgb in
+  let color_selection = 0., 0.2, 1., 1. in
   let color_proc_active = 0.05, 0.05, 0.05, 0.08 in
+  let alpha_selection = 0.3 in
   let scroll_zoom_factor = 0.05 in
   let scale_bar_number_of_increments = 10 in
   let scale_bar_thickness = 3. in
@@ -368,8 +449,8 @@ let make
   let activity_duration_factor = 100. in
 
   let preferred_height =
-    int_of_float scale_bar_height
-    + int_of_float proc_chart_height * number_of_processors
+    let per_proc = proc_chart_height +. proc_chart_vertical_spacing in
+    int_of_float scale_bar_height + int_of_float per_proc * number_of_processors
   in
 
   let da =
@@ -398,12 +479,14 @@ let make
       global_span;
       current_span = global_span;
 
-      current_selection = default_selection global_span;
+      current_selection = None;
       selection_in_progress = false;
 
       left_margin;
       color_background;
       color_proc_active;
+      color_selection;
+      alpha_selection;
       scroll_zoom_factor;
       scale_bar_number_of_increments;
       scale_bar_thickness;
@@ -429,6 +512,17 @@ let make
     }
   in
   ignore @@ da#event#connect#expose ~callback:(expose tl);
+  ignore @@ da#event#connect#button_press ~callback:(click tl true);
+  ignore @@ da#event#connect#button_release ~callback:(click tl false);
+  ignore @@ da#event#connect#motion_notify ~callback:(move tl);
+  ignore @@
+    da#event#add
+      [
+        `BUTTON_PRESS;
+        `BUTTON_RELEASE;
+        `POINTER_MOTION;
+      ];
+
   tl
 
 let add_activity ~kind ~color tl =
@@ -438,3 +532,16 @@ let add_activity ~kind ~color tl =
 let add_event ~kind ~color tl =
   tl.events <- (kind, color) :: tl.events;
   redraw tl
+
+let zoom_to_global tl =
+  tl.current_span <- tl.global_span;
+  redraw tl
+
+let zoom_to_selection tl =
+  match tl.current_selection with
+  | None ->
+     ()
+  | Some s ->
+     tl.current_span <- s;
+     selection_reset tl;
+     redraw tl
