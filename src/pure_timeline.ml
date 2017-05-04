@@ -554,6 +554,7 @@ let add_event ~kind ~color tl =
 
 let zoom_to_global tl =
   tl.current_span <- tl.global_span;
+  selection_reset tl;
   redraw tl
 
 let zoom_to_selection tl =
