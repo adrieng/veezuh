@@ -1,11 +1,3 @@
-(* Time-related primitives *)
-
-type time = float
-
-type time_span = float * float
-
-val truncate : time_span -> time -> time
-
 (* Activities and Events *)
 
 type activity_kind = string
@@ -17,24 +9,31 @@ type processor = int
 (* Callbacks *)
 
 type get_activities_callback =
-  activity:activity_kind ->
+  kind:activity_kind ->
   for_proc:processor ->
-  between:time_span ->
-  time_span list
+  between:Time.span ->
+  min_duration:Time.time ->
+  Time.span list
 
 type get_events_callback =
-  event:event_kind ->
+  kind:event_kind ->
   for_proc:processor ->
-  between:time_span ->
-  time list
+  between:Time.span ->
+  Time.time list
 
 (* The Timeline control *)
 
 type t
 
 val make :
-  width:int ->
-  height:int ->
+  global_span:Time.span ->
   number_of_processors:int ->
+  get_activities:get_activities_callback ->
+  get_events:get_events_callback ->
   packing:(GObj.widget -> unit) ->
+  unit ->
   t
+
+val add_activity : kind:activity_kind -> color:Utils.rgba -> t -> unit
+
+val add_event : kind:event_kind -> color:Utils.rgba -> t -> unit

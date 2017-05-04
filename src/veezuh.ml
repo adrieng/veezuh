@@ -2,6 +2,7 @@
 
 open GMain
 open Timeline
+open Pure_timeline
 
 let width = 800
 
@@ -31,6 +32,7 @@ let _ = GMain.init ()
 
 let open_trace_window filename =
   let trace = Trace.from_sqlite_file filename in
+  let number_of_processors = Trace.number_of_processors trace in
 
   (* Window *)
   let window = GWindow.window ~width ~height ~title:("Veezuh " ^ filename) () in
@@ -67,6 +69,37 @@ let open_trace_window filename =
   create_event_check_buttons tl event_factory;
 
   window#add_accel_group accel_group;
+
+  let get_activities ~kind ~for_proc ~between ~min_duration =
+    Trace.activities_between
+      ~kind
+      ~between
+      ~min_duration (* place-holder *)
+      ~proc:for_proc
+      trace
+  in
+
+  let get_events ~kind ~for_proc ~between =
+    Trace.events_between
+      ~between
+      ~kind
+      ~proc:for_proc
+      trace
+  in
+
+  let hbox = GPack.hbox ~packing:(vbox#pack ~expand:true) () in
+
+  let tl' =
+    Pure_timeline.make
+      ~global_span:(Trace.time_span trace)
+      ~number_of_processors
+      ~get_activities
+      ~get_events
+      ~packing:(hbox#pack ~expand:true)
+      ()
+  in
+  Pure_timeline.add_activity ~kind:"GC" ~color:(1.0, 0.2, 0.0, 1.) tl';
+  Pure_timeline.add_event ~kind:"THREAD_COPY" ~color:(0.6, 0.1, 0.2, 1.) tl';
 
   (* Display the windows and enter Gtk+ main loop *)
   window#show ();

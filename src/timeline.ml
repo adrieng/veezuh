@@ -1,34 +1,5 @@
 open Cairo
-
-let pi = 4. *. atan 1.
-let pi2 = 2. *. pi
-
-let find_good_unit_scaling t =
-  let rec find t p =
-    if p >= 3 then t, p
-    else if t < 0.01 then find (t *. 1000.) (p + 1)
-    else t, p
-  in
-  let _, p = find t 0 in
-  1000. ** float p, List.nth ["s"; "ms"; "us"; "ns"] p
-
-let rgba cr (r, g, b, a) =
-  Cairo.set_source_rgba cr ~r ~g ~b ~a
-
-let rgb cr (r, g, b) =
-  Cairo.set_source_rgba cr ~r ~g ~b ~a:1.
-
-let black cr =
-  Cairo.set_source_rgb cr 0. 0. 0.
-
-let gray_rect ~x ~y ~width ~height cr =
-  Cairo.set_source_rgb cr 0.5 0.5 0.5;
-  Cairo.rectangle cr x y width height;
-  Cairo.fill cr;
-  ()
-
-let middle x1 x2 =
-  (x1 +. x2) /. 2.
+open Utils
 
 let draw_background
       ~width
@@ -51,7 +22,7 @@ let draw_scale_bar
       cr =
   Cairo.translate cr 0. (height -. 1.);
 
-  black cr;
+  set_black cr;
 
   (* Draw the main axis. *)
   Cairo.set_line_width cr thickness;
@@ -107,7 +78,7 @@ let draw_processor_chart
   (* Draw the "P XXX" label. *)
   let label = "P" ^ string_of_int processor in
   let label_extent = Cairo.text_extents cr label in
-  black cr;
+  set_black cr;
   Cairo.move_to
     cr
     (-. label_extent.width -. 5.)
@@ -116,17 +87,17 @@ let draw_processor_chart
   Cairo.stroke cr;
 
   (* By default, a processor is considered active. *)
-  rgba cr color_user;
+  set_rgba cr color_user;
   Cairo.rectangle cr 0. 0. width height;
   Cairo.fill cr;
 
   (* Draw GC period *)
-  rgba cr color_gc;
+  set_rgba cr color_gc;
 
   let total_time = cur_max_time -. cur_min_time in
   let x_ratio = width /. total_time in
 
-  let draw_gc_period (start, stop) =
+  let draw_gc_period { Time.l = start; Time.u = stop; } =
     (* start and stop are in absolute time, we have to translate them first to
        local time, then to x coordinates. *)
     let l_start = start -. cur_min_time in
@@ -140,8 +111,7 @@ let draw_processor_chart
 
   let gc_periods =
     Trace.gc_periods_between
-      ~min:cur_min_time
-      ~max:cur_max_time
+      ~between:Time.{ l = cur_min_time; u = cur_max_time; }
       ~min_duration:0.000000001
       ~proc:processor
       trace
@@ -159,7 +129,7 @@ let draw_selection
       ~x_start
       ~x_stop
       cr =
-  rgb cr color;
+  set_rgb cr color;
 
   let draw_vertical_bar x =
     Cairo.rectangle cr x 0. bar_thickness height;
@@ -198,8 +168,7 @@ let draw_events_of_kinds
   let draw_events_of_kind (kind, color) =
     let events =
       Trace.events_between
-        ~min:cur_min_time
-        ~max:cur_max_time
+        ~between:Time.{ l = cur_min_time; u = cur_max_time; }
         ~proc:processor
         ~kind
         trace
@@ -209,7 +178,7 @@ let draw_events_of_kinds
     let x_ratio = width /. (cur_max_time -. cur_min_time) in
     let pos_of_time t = (t -. cur_min_time) *. x_ratio in
 
-    rgba cr color;
+    set_rgba cr color;
 
     let draw_event_mark t =
       let x = pos_of_time t in
@@ -232,7 +201,7 @@ let draw_events_of_kinds
 class timeline ~packing trace =
   let pcount = Trace.number_of_processors trace in
 
-  let min_time, max_time = Trace.time_range trace in
+  let { Time.l = min_time; Time.u = max_time; } = Trace.time_span trace in
 
   let sw = GBin.scrolled_window ~packing:packing () in
 
@@ -272,7 +241,7 @@ class timeline ~packing trace =
 
     val scale_bar_height = 20.
 
-    val proc_chart_horizontal_spacing = 2.
+    val proc_chart_vertical_spacing = 2.
 
     val proc_chart_height = 30.
 
@@ -285,7 +254,7 @@ class timeline ~packing trace =
     (* Methods computing appearance-related things *)
 
     method chart_height () =
-      float pcount *. (proc_chart_height +. proc_chart_horizontal_spacing)
+      float pcount *. (proc_chart_height +. proc_chart_vertical_spacing)
 
     method height () =
       scale_bar_height +. self#chart_height ()
@@ -424,7 +393,7 @@ class timeline ~packing trace =
 
       (* Draw each processor's chart *)
       for p = 0 to pcount - 1 do
-        Cairo.translate ~x:0. ~y:proc_chart_horizontal_spacing cr;
+        Cairo.translate ~x:0. ~y:proc_chart_vertical_spacing cr;
         draw_processor_chart
           ~width:chart_width
           ~height:proc_chart_height
