@@ -51,25 +51,6 @@ let open_trace_window filename =
 
   let tl = create_timeline vbox trace in
 
-  (* View menu *)
-  let view_menu = menu_factory#add_submenu "View" in
-  let view_factory = new GMenu.factory view_menu ~accel_group in
-  ignore @@
-    view_factory#add_item
-      "Zoom to default"
-      ~key:GdkKeysyms._R
-      ~callback:(fun _ -> tl#zoom_to_default ());
-  ignore @@
-    view_factory#add_item
-      "Zoom to selection"
-      ~key:GdkKeysyms._E
-      ~callback:(fun _ -> tl#zoom_to_selection ());
-  let event_submenu = view_factory#add_submenu "Events" in
-  let event_factory = new GMenu.factory event_submenu ~accel_group in
-  create_event_check_buttons tl event_factory;
-
-  window#add_accel_group accel_group;
-
   let get_activities ~kind ~for_proc ~between ~min_duration =
     Trace.activities_between
       ~kind
@@ -100,6 +81,30 @@ let open_trace_window filename =
   in
   Pure_timeline.add_activity ~kind:"GC" ~color:(1.0, 0.2, 0.0, 1.) tl';
   Pure_timeline.add_event ~kind:"THREAD_COPY" ~color:(0.6, 0.1, 0.2, 1.) tl';
+
+  (* View menu *)
+  let view_menu = menu_factory#add_submenu "View" in
+  let view_factory = new GMenu.factory view_menu ~accel_group in
+  ignore @@
+    view_factory#add_item
+      "Zoom to default"
+      ~key:GdkKeysyms._R
+      ~callback:(fun _ ->
+        tl#zoom_to_default ();
+        Pure_timeline.zoom_to_global tl');
+  ignore @@
+    view_factory#add_item
+      "Zoom to selection"
+      ~key:GdkKeysyms._E
+      ~callback:(fun _ ->
+        tl#zoom_to_selection ();
+        Pure_timeline.zoom_to_selection tl'
+      );
+  let event_submenu = view_factory#add_submenu "Events" in
+  let event_factory = new GMenu.factory event_submenu ~accel_group in
+  create_event_check_buttons tl event_factory;
+
+  window#add_accel_group accel_group;
 
   (* Display the windows and enter Gtk+ main loop *)
   window#show ();

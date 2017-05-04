@@ -37,3 +37,7 @@ val make :
 val add_activity : kind:activity_kind -> color:Utils.rgba -> t -> unit
 
 val add_event : kind:event_kind -> color:Utils.rgba -> t -> unit
+
+val zoom_to_global : t -> unit
+
+val zoom_to_selection : t -> unit
