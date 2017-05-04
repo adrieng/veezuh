@@ -123,15 +123,17 @@ let width tl =
 let height tl =
   float tl.da#misc#allocation.Gtk.height
 
-
 let chart_left tl =
   float tl.left_margin
+
+let chart_right tl =
+  width tl
 
 let chart_top tl =
   tl.scale_bar_height
 
 let chart_width tl =
-  width tl -. chart_left tl
+  chart_right tl -. chart_left tl
 
 let chart_height tl =
   height tl -. chart_top tl
@@ -141,14 +143,17 @@ let chart_dim tl =
 
 (* Conversion functions between time and graphical space *)
 
+let current_epoch_range tl =
+  Range.range tl.current_epoch
+
 let time_per_pixel tl =
-  Range.range tl.current_epoch /. chart_width tl
+  current_epoch_range tl /. chart_width tl
 
 let time_per_increment tl =
-  Range.range tl.current_epoch /. float tl.scale_bar_number_of_increments
+  current_epoch_range tl /. float tl.scale_bar_number_of_increments
 
 let pixels_per_time tl =
-  chart_width tl /. Range.range tl.current_epoch
+  chart_width tl /. current_epoch_range tl
 
 let pixels_per_increment tl =
   chart_width tl /. float tl.scale_bar_number_of_increments
@@ -165,6 +170,10 @@ let raw_time_of_drawing_pos tl x =
 let drawing_pos_of_time tl t =
   let t = Range.truncate tl.current_epoch t in
   chart_left tl +. pixels_per_time tl *. (t -. tl.current_epoch.l)
+
+let chart_pos_of_drawing_pos tl x =
+  let x = Range.truncate { l = chart_left tl; u = chart_right tl; } x in
+  x -. chart_left tl
 
 (* Derived graphical parameters *)
 
@@ -212,6 +221,9 @@ let y_pos_of_processor_label tl p =
 let current_unit_scaling tl =
   find_good_unit_scaling @@ time_per_increment tl
 
+let truncate_pos_to_chart tl x =
+  Range.truncate { l = chart_left tl; u = chart_right tl; } x
+
 (* Selection-related things *)
 
 let selection_reset tl =
@@ -234,7 +246,7 @@ let configure_scrollbars tl =
   tl.hsc#adjustment#set_lower tl.global_epoch.l;
   tl.hsc#adjustment#set_upper tl.global_epoch.u;
   tl.hsc#adjustment#set_value tl.current_epoch.l;
-  tl.hsc#adjustment#set_page_size (Range.range tl.current_epoch);
+  tl.hsc#adjustment#set_page_size (current_epoch_range tl);
   tl.hsc#adjustment#set_step_increment (time_per_increment tl);
   (* Vertical scrollbar *)
   tl.vsc#adjustment#set_lower 0.;
@@ -448,6 +460,32 @@ let draw_timeline tl cr =
   ()
 ;;
 
+(* High-level actions *)
+
+let change_current_epoch ~epoch tl =
+  tl.current_epoch <- Range.clip ~within:tl.global_epoch epoch;
+  redraw ~scrollbars:true tl
+
+let zoom ~x ~factor tl =
+  let xr = x /. chart_width tl in
+  let latt = if xr < 0.1 then 0. else 1. in
+  let ratt = if xr > 0.9 then 0. else 1. in
+  let lchange = current_epoch_range tl *. factor *. latt *. xr in
+  let rchange = current_epoch_range tl *. factor *. ratt *. (1. -. xr) in
+  change_current_epoch
+    ~epoch:{ l = tl.current_epoch.l +. lchange;
+             u = tl.current_epoch.u -. rchange; }
+    tl;
+  ()
+
+let zoom_in ~x tl =
+  zoom ~x ~factor:tl.scroll_zoom_factor tl;
+  ()
+
+let zoom_out ~x tl =
+  zoom ~x ~factor:(-. tl.scroll_zoom_factor) tl;
+  ()
+
 (* Gtk callbacks *)
 
 let click tl pressed e =
@@ -484,12 +522,28 @@ let configure tl _ =
 let scrollbar_value_changed tl () =
   (* Horizontal scrollbar *)
   let l = tl.hsc#adjustment#value in
-  let u = l +. Range.range tl.current_epoch in
+  let u = l +. current_epoch_range tl in
   tl.current_epoch <- { l; u; };
   (* Vertical scrollbar *)
   tl.current_visible_chart_top <- tl.vsc#adjustment#value;
   redraw tl;
   ()
+
+let mouse_wheel tl e =
+  let state = GdkEvent.Scroll.state e in
+  let modifiers = Gdk.Convert.modifier state in
+  if List.mem `CONTROL modifiers
+  then begin
+      let x = chart_pos_of_drawing_pos tl @@ GdkEvent.Scroll.x e in
+      match GdkEvent.Scroll.direction e with
+      | `UP ->
+         zoom_in ~x tl
+      | `DOWN ->
+         zoom_out ~x tl
+      | _ ->
+         ()
+    end;
+  false
 
 (* Construction function *)
 
@@ -517,7 +571,7 @@ let make
   let color_selection = 0., 0.2, 1., 1. in
   let color_proc_active = 0.05, 0.05, 0.05, 0.08 in
   let alpha_selection = 0.3 in
-  let scroll_zoom_factor = 0.05 in
+  let scroll_zoom_factor = 0.1 in
   let scale_bar_number_of_increments = 10 in
   let scale_bar_thickness = 3. in
   let scale_bar_increments_height = 5. in
@@ -593,9 +647,11 @@ let make
   ignore @@ da#event#connect#button_press ~callback:(click tl true);
   ignore @@ da#event#connect#button_release ~callback:(click tl false);
   ignore @@ da#event#connect#motion_notify ~callback:(move tl);
+  ignore @@ da#event#connect#scroll ~callback:(mouse_wheel tl);
   ignore @@
     da#event#add
       [
+        `SCROLL;
         `BUTTON_PRESS;
         `BUTTON_RELEASE;
         `POINTER_MOTION;
@@ -617,15 +673,13 @@ let add_event ~kind ~color tl =
   redraw tl
 
 let zoom_to_global tl =
-  tl.current_epoch <- tl.global_epoch;
   selection_reset tl;
-  redraw ~scrollbars:true tl
+  change_current_epoch ~epoch:tl.global_epoch tl
 
 let zoom_to_selection tl =
   match tl.current_selection with
   | None ->
      ()
-  | Some s ->
-     tl.current_epoch <- s;
+  | Some epoch ->
      selection_reset tl;
-     redraw ~scrollbars:true tl
+     change_current_epoch epoch tl
