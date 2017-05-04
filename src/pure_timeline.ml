@@ -50,6 +50,8 @@ type t =
 
     mutable current_epoch : Range.span;
 
+    mutable current_visible_chart_top : float;
+
     (* Selection parameters *)
 
     mutable current_selection : Range.span option;
@@ -121,6 +123,7 @@ let width tl =
 let height tl =
   float tl.da#misc#allocation.Gtk.height
 
+
 let chart_left tl =
   float tl.left_margin
 
@@ -168,20 +171,41 @@ let drawing_pos_of_time tl t =
 let height_per_processor_bar tl =
   tl.proc_chart_height +. tl.proc_chart_vertical_spacing
 
+let chart_preferred_height tl =
+  height_per_processor_bar tl *. float tl.number_of_processors
+  +. tl.scale_bar_height
+
 let position_of_increment tl i =
   chart_left tl +. pixels_per_increment tl *. float i
 
+let first_visible_processor tl =
+  let top = int_of_float tl.current_visible_chart_top in
+  let hpp = int_of_float @@ height_per_processor_bar tl in
+  top / hpp
+
+let number_of_visible_processors tl =
+  let number_of_processor_bars =
+    ceil (chart_height tl /. height_per_processor_bar tl)
+  in
+  min tl.number_of_processors (int_of_float number_of_processor_bars)
+
+let visible_processors tl =
+  let first = first_visible_processor tl in
+  let last = first + number_of_visible_processors tl - 1 in
+  first, last
+
 let y_pos_of_processor_chart tl p =
+  let p = p - first_visible_processor tl in
+  if p < 0
+  then
+    Format.eprintf
+      "WARNING: asking for position of processor %d which is not visible@."
+      p;
+  let p = max 0 p in
   chart_top tl +. float p *. height_per_processor_bar tl
 
 let y_pos_of_processor_label tl p =
   y_pos_of_processor_chart tl p +. height_per_processor_bar tl /. 2.
-
-let chart_visible_height tl =
-  let always_visible =
-    int_of_float tl.scale_bar_height + tl.hsc#misc#allocation.Gtk.height
-  in
-  float (tl.tbl#misc#allocation.Gtk.height - always_visible)
 
 (* Misc *)
 
@@ -212,10 +236,15 @@ let configure_scrollbars tl =
   tl.hsc#adjustment#set_value tl.current_epoch.l;
   tl.hsc#adjustment#set_page_size (Range.range tl.current_epoch);
   tl.hsc#adjustment#set_step_increment (time_per_increment tl);
+  (* Vertical scrollbar *)
+  tl.vsc#adjustment#set_lower 0.;
+  tl.vsc#adjustment#set_upper (chart_preferred_height tl);
+  tl.vsc#adjustment#set_value tl.current_visible_chart_top;
+  tl.vsc#adjustment#set_page_size (chart_height tl);
   ()
 
-let redraw tl =
-  configure_scrollbars tl;
+let redraw ?(scrollbars = false) tl =
+  if scrollbars then configure_scrollbars tl;
   GtkBase.Widget.queue_draw tl.da#as_widget
 
 (* High-level drawing functions *)
@@ -324,8 +353,9 @@ let draw_scale_bar
   ()
 
 let draw_legend tl cr =
+  let p_min, p_max = visible_processors tl in
   set_black cr;
-  for p = 0 to tl.number_of_processors - 1 do
+  for p = p_min to p_max do
     let y = y_pos_of_processor_label tl p in
     Cairo.move_to cr ~x:10. ~y;
     Cairo.Path.text cr ("Processor " ^ string_of_int p);
@@ -334,7 +364,8 @@ let draw_legend tl cr =
   ()
 
 let draw_processor_chart tl cr =
-  for p = 0 to tl.number_of_processors - 1 do
+  let p_min, p_max = visible_processors tl in
+  for p = p_min to p_max do
     (* Draw the default per-processor activity background. *)
     set_rgba cr tl.color_proc_active;
     draw_epoch_on_processor ~p tl cr tl.current_epoch;
@@ -451,9 +482,12 @@ let configure tl _ =
   false
 
 let scrollbar_value_changed tl () =
+  (* Horizontal scrollbar *)
   let l = tl.hsc#adjustment#value in
   let u = l +. Range.range tl.current_epoch in
   tl.current_epoch <- { l; u; };
+  (* Vertical scrollbar *)
+  tl.current_visible_chart_top <- tl.vsc#adjustment#value;
   redraw tl;
   ()
 
@@ -496,15 +530,9 @@ let make
   let event_mark_radius = 2.5 in
   let activity_duration_factor = 100. in
 
-  let preferred_height =
-    let per_proc = proc_chart_height +. proc_chart_vertical_spacing in
-    int_of_float scale_bar_height + int_of_float per_proc * number_of_processors
-  in
-
   let da =
     GMisc.drawing_area
-      ~height:preferred_height
-      ~packing:(tbl#attach ~top:0 ~left:0 ~expand:`X)
+      ~packing:(tbl#attach ~top:0 ~left:0 ~expand:`BOTH)
       ()
   in
   let vsc =
@@ -526,6 +554,7 @@ let make
 
       global_epoch;
       current_epoch = global_epoch;
+      current_visible_chart_top = 0.;
 
       current_selection = None;
       selection_in_progress = false;
@@ -574,6 +603,9 @@ let make
   ignore @@
     hsc#adjustment#connect#value_changed
       ~callback:(scrollbar_value_changed tl);
+  ignore @@
+    vsc#adjustment#connect#value_changed
+      ~callback:(scrollbar_value_changed tl);
   tl
 
 let add_activity ~kind ~color tl =
@@ -587,7 +619,7 @@ let add_event ~kind ~color tl =
 let zoom_to_global tl =
   tl.current_epoch <- tl.global_epoch;
   selection_reset tl;
-  redraw tl
+  redraw ~scrollbars:true tl
 
 let zoom_to_selection tl =
   match tl.current_selection with
@@ -596,4 +628,4 @@ let zoom_to_selection tl =
   | Some s ->
      tl.current_epoch <- s;
      selection_reset tl;
-     redraw tl
+     redraw ~scrollbars:true tl
