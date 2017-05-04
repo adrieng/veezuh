@@ -157,7 +157,7 @@ let global_time_of_drawing_pos tl x =
   local_time_of_drawing_pos tl x +. tl.current_span.l -. tl.global_span.l
 
 let raw_time_of_drawing_pos tl x =
-  tl.global_span.l +. local_time_of_drawing_pos tl x
+  tl.current_span.l +. local_time_of_drawing_pos tl x
 
 let drawing_pos_of_time tl t =
   let t = Time.truncate tl.current_span t in
