@@ -26,7 +26,7 @@ type get_events_callback =
 type t
 
 val make :
-  global_span:Time.span ->
+  global_epoch:Time.span ->
   number_of_processors:int ->
   get_activities:get_activities_callback ->
   get_events:get_events_callback ->
