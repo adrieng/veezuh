@@ -479,7 +479,7 @@ let make
   let scale_bar_height = 30. in
   let proc_chart_vertical_spacing = 2. in
   let proc_chart_height = 40. in
-  let selection_bar_thickness = 1. in
+  let selection_bar_thickness = 2. in
   let event_mark_thickness = 2. in
   let event_mark_radius = 2.5 in
   let activity_duration_factor = 100. in
