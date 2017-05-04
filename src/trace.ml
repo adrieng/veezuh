@@ -47,21 +47,24 @@ let from_sqlite_file filename =
 
   { db; procs; }
 
-let time_range { db; _ } =
-  result
-    db
-    (Pair (Real, Real))
-    "SELECT MIN(time), MAX(time) FROM events;"
+let time_span { db; _ } =
+  let l, u =
+    result
+      db
+      (Pair (Real, Real))
+      "SELECT MIN(time), MAX(time) FROM events;"
+  in
+  Time.{ l; u; }
 
 let number_of_processors { procs; _ } =
   Array.length procs
 
-let gc_periods_between ~min ~max ~min_duration ~proc { db; procs; } =
+let gc_periods_between ~between ~min_duration ~proc { db; procs; } =
   if !debug then
     Printf.eprintf
       "Querying for GC activity in [%f,%f] on proc %d\n"
-      min
-      max
+      between.Time.l
+      between.Time.u
       proc;
   let req =
     Printf.sprintf
@@ -76,8 +79,8 @@ let gc_periods_between ~min ~max ~min_duration ~proc { db; procs; } =
         WHERE b.kind = \"GC_LEAVE\" AND e.time < b.time
         AND b.time < l.time);"
       (procs.(proc))
-      min
-      max
+      between.Time.l
+      between.Time.u
       min_duration
   in
   let l =
@@ -87,9 +90,44 @@ let gc_periods_between ~min ~max ~min_duration ~proc { db; procs; } =
       req
   in
   if !debug then Printf.eprintf "=> Got %d GC periods\n" (List.length l);
-  l
+  List.map (fun (l, u) -> Time.{ l; u; }) l
 
-let events_between ~min ~max ~proc ~kind { db; procs; } =
+let activities_between ~kind ~between ~min_duration ~proc { db; procs; } =
+  if !debug then
+    Printf.eprintf
+      "Querying for activity %s in [%f,%f] on proc %d\n"
+      kind
+      between.Time.l
+      between.Time.u
+      proc;
+  let req =
+    Printf.sprintf
+      "
+       SELECT e.time, l.time
+       FROM events e JOIN events l
+       WHERE e.kind = \"%s_ENTER\" AND l.kind = \"%s_LEAVE\"
+       AND e.argptr = l.argptr AND e.argptr = %d AND e.time < l.time
+       AND %f <= e.time AND l.time <= %f AND l.time - e.time >= %f
+       AND NOT EXISTS
+       (SELECT * FROM events b
+        WHERE b.kind = \"GC_LEAVE\" AND e.time < b.time
+        AND b.time < l.time);"
+      kind kind
+      (procs.(proc))
+      between.Time.l
+      between.Time.u
+      min_duration
+  in
+  let l =
+    results
+      db
+      (Pair (Real, Real))
+      req
+  in
+  if !debug then Printf.eprintf "=> Got %d activities\n" (List.length l);
+  List.map (fun (l, u) -> Time.{ l; u; }) l
+
+let events_between ~between ~proc ~kind { db; procs; } =
   let req =
     Printf.sprintf
       "
@@ -97,8 +135,8 @@ let events_between ~min ~max ~proc ~kind { db; procs; } =
        FROM events
        WHERE kind = \"%s\" AND %f <= time AND time <= %f AND argptr = %d;"
       kind
-      min
-      max
+      between.Time.l
+      between.Time.u
       procs.(proc)
   in
   results db Real req

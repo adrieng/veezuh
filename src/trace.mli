@@ -2,22 +2,28 @@ type t
 
 val from_sqlite_file : string -> t
 
-val time_range : t -> float * float
+val time_span : t -> Time.span
 
 val number_of_processors : t -> int
 
 val gc_periods_between :
-  min:float ->
-  max:float ->
+  between:Time.span ->
   min_duration:float ->
   proc:int ->
   t ->
-  (float * float) list
+  Time.span list
+
+val activities_between :
+  kind:string ->
+  between:Time.span ->
+  min_duration:float ->
+  proc:int ->
+  t ->
+  Time.span list
 
 val events_between :
-  min:float ->
-  max:float ->
+  between:Time.span ->
   proc:int ->
   kind:string ->
   t ->
-  float list
+  Time.time list
