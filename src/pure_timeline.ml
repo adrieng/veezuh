@@ -126,6 +126,18 @@ let chart_dim tl =
 
 (* Conversion functions between time and graphical space *)
 
+(* Some terminological conventions:
+
+      raw time = absolute time, only used for storing the global span
+   global time = time since the start of the global span
+    local time = time since the start of the current span
+
+   drawing pos = position in the drawing area
+     chart pos = position in the chart inside the drawing area
+
+   The various spans (global, local, selection) are stored in raw time.
+ *)
+
 let time_per_pixel tl =
   Time.range tl.current_span /. chart_width tl
 
@@ -138,20 +150,26 @@ let pixels_per_time tl =
 let pixels_per_increment tl =
   chart_width tl /. float tl.scale_bar_number_of_increments
 
-let relative_time_of_timeline_pos tl x =
+let local_time_of_drawing_pos tl x =
   time_per_pixel tl *. (x -. chart_left tl)
 
-let absolute_time_of_timeline_pos tl x =
-  tl.current_span.l +. relative_time_of_timeline_pos tl x
+let global_time_of_drawing_pos tl x =
+  local_time_of_drawing_pos tl x +. tl.current_span.l -. tl.global_span.l
 
-let position_of_increment tl i =
-  chart_left tl +. pixels_per_increment tl *. float i
+let raw_time_of_drawing_pos tl x =
+  tl.global_span.l +. local_time_of_drawing_pos tl x
 
-let current_unit_scaling tl =
-  find_good_unit_scaling @@ time_per_increment tl
+let drawing_pos_of_time tl t =
+  let t = Time.truncate tl.current_span t in
+  chart_left tl +. pixels_per_time tl *. (t -. tl.current_span.l)
+
+(* Derived graphical parameters *)
 
 let height_per_processor_bar tl =
   tl.proc_chart_height +. tl.proc_chart_vertical_spacing
+
+let position_of_increment tl i =
+  chart_left tl +. pixels_per_increment tl *. float i
 
 let y_pos_of_processor_chart tl p =
   chart_top tl +. float p *. height_per_processor_bar tl
@@ -159,9 +177,10 @@ let y_pos_of_processor_chart tl p =
 let y_pos_of_processor_label tl p =
   y_pos_of_processor_chart tl p +. height_per_processor_bar tl /. 2.
 
-let absolute_pos_of_time tl t =
-  let t = Time.truncate tl.current_span t in
-  chart_left tl +. pixels_per_time tl *. (t -. tl.current_span.l)
+(* Misc *)
+
+let current_unit_scaling tl =
+  find_good_unit_scaling @@ time_per_increment tl
 
 (* Selection-related things *)
 
@@ -181,8 +200,8 @@ let selection_right_side tl u =
 (* High-level drawing functions *)
 
 let draw_span ~y ~h tl cr s =
-  let x0 = absolute_pos_of_time tl s.l in
-  let x1 = absolute_pos_of_time tl s.u in
+  let x0 = drawing_pos_of_time tl s.l in
+  let x1 = drawing_pos_of_time tl s.u in
   let w = max (x1 -. x0) 1. in
   Cairo.rectangle cr ~x:x0 ~y ~w ~h;
   Cairo.fill cr
@@ -193,7 +212,7 @@ let draw_span_on_processor ~p tl cr s =
   draw_span ~y ~h tl cr s
 
 let draw_event_on_processor ~p tl cr t =
-  let x = absolute_pos_of_time tl t in
+  let x = drawing_pos_of_time tl t in
   let y = y_pos_of_processor_chart tl p in
   let h = tl.proc_chart_height in
 
@@ -278,7 +297,7 @@ let draw_scale_bar
   Cairo.set_line_width cr 1.;
   for i = 0 to tl.scale_bar_number_of_increments - 1 do
     let x = position_of_increment tl i in
-    let t = relative_time_of_timeline_pos tl x *. t_scale in
+    let t = global_time_of_drawing_pos tl x *. t_scale in
     let label = Printf.sprintf "%.2f %s" t pref in
     (* Draw the small increment bar *)
     draw_increment ~label x;
@@ -339,8 +358,8 @@ let draw_selection tl cr =
   | Some s ->
      set_rgba cr tl.color_selection;
 
-     let x_l = absolute_pos_of_time tl s.l in
-     let x_u = absolute_pos_of_time tl s.u in
+     let x_l = drawing_pos_of_time tl s.l in
+     let x_u = drawing_pos_of_time tl s.u in
      let y = chart_top tl in
      let h = chart_height tl in
 
@@ -384,7 +403,7 @@ let draw_timeline tl cr =
 
 let click tl pressed e =
   let x = GdkEvent.Button.x e in
-  let t = absolute_time_of_timeline_pos tl x in
+  let t = raw_time_of_drawing_pos tl x in
   let button = GdkEvent.Button.button e in
   if button = 1 then
     begin
@@ -396,7 +415,7 @@ let click tl pressed e =
 
 let move tl e =
   let x = GdkEvent.Motion.x e in
-  let u = absolute_time_of_timeline_pos tl x in
+  let u = raw_time_of_drawing_pos tl x in
   if tl.selection_in_progress
   then
     begin
