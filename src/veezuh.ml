@@ -49,7 +49,7 @@ let open_trace_window filename =
   let file_factory = new GMenu.factory file_menu ~accel_group in
   ignore @@ file_factory#add_item "Quit" ~key:GdkKeysyms._Q ~callback:Main.quit;
 
-  let tl = create_timeline vbox trace in
+  (* let tl = create_timeline vbox trace in *)
 
   let get_activities ~kind ~for_proc ~between ~min_duration =
     Trace.activities_between
@@ -90,19 +90,19 @@ let open_trace_window filename =
       "Zoom to default"
       ~key:GdkKeysyms._R
       ~callback:(fun _ ->
-        tl#zoom_to_default ();
+        (* tl#zoom_to_default (); *)
         Pure_timeline.zoom_to_global tl');
   ignore @@
     view_factory#add_item
       "Zoom to selection"
       ~key:GdkKeysyms._E
       ~callback:(fun _ ->
-        tl#zoom_to_selection ();
+        (* tl#zoom_to_selection (); *)
         Pure_timeline.zoom_to_selection tl'
       );
-  let event_submenu = view_factory#add_submenu "Events" in
-  let event_factory = new GMenu.factory event_submenu ~accel_group in
-  create_event_check_buttons tl event_factory;
+  (* let event_submenu = view_factory#add_submenu "Events" in *)
+  (* let event_factory = new GMenu.factory event_submenu ~accel_group in *)
+  (* create_event_check_buttons tl event_factory; *)
 
   window#add_accel_group accel_group;
 
