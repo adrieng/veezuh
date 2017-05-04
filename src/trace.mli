@@ -2,7 +2,7 @@ type t
 
 val from_sqlite_file : string -> t
 
-val time_span : t -> Time.span
+val epoch : t -> Time.span
 
 val number_of_processors : t -> int
 

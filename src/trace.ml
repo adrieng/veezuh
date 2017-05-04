@@ -47,7 +47,7 @@ let from_sqlite_file filename =
 
   { db; procs; }
 
-let time_span { db; _ } =
+let epoch { db; _ } =
   let l, u =
     result
       db

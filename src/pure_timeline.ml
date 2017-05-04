@@ -26,6 +26,18 @@ type get_events_callback =
 
 (* The Timeline control *)
 
+(* Some terminological conventions:
+
+      raw time = absolute time, used to communicate with the outside
+   global time = time since the start of the global span
+    local time = time since the start of the current span
+
+   drawing pos = position in the drawing area
+     chart pos = position in the chart inside the drawing area
+
+   The various epochs (global, local, selection) are stored in raw time.
+ *)
+
 type t =
   {
     (* Global immutable parameters *)
@@ -34,9 +46,9 @@ type t =
 
     (* Time parameters *)
 
-    global_span : Time.span;
+    global_epoch : Time.span;
 
-    mutable current_span : Time.span;
+    mutable current_epoch : Time.span;
 
     (* Selection parameters *)
 
@@ -126,26 +138,14 @@ let chart_dim tl =
 
 (* Conversion functions between time and graphical space *)
 
-(* Some terminological conventions:
-
-      raw time = absolute time, only used for storing the global span
-   global time = time since the start of the global span
-    local time = time since the start of the current span
-
-   drawing pos = position in the drawing area
-     chart pos = position in the chart inside the drawing area
-
-   The various spans (global, local, selection) are stored in raw time.
- *)
-
 let time_per_pixel tl =
-  Time.range tl.current_span /. chart_width tl
+  Time.range tl.current_epoch /. chart_width tl
 
 let time_per_increment tl =
-  Time.range tl.current_span /. float tl.scale_bar_number_of_increments
+  Time.range tl.current_epoch /. float tl.scale_bar_number_of_increments
 
 let pixels_per_time tl =
-  chart_width tl /. Time.range tl.current_span
+  chart_width tl /. Time.range tl.current_epoch
 
 let pixels_per_increment tl =
   chart_width tl /. float tl.scale_bar_number_of_increments
@@ -154,14 +154,14 @@ let local_time_of_drawing_pos tl x =
   time_per_pixel tl *. (x -. chart_left tl)
 
 let global_time_of_drawing_pos tl x =
-  local_time_of_drawing_pos tl x +. tl.current_span.l -. tl.global_span.l
+  local_time_of_drawing_pos tl x +. tl.current_epoch.l -. tl.global_epoch.l
 
 let raw_time_of_drawing_pos tl x =
-  tl.current_span.l +. local_time_of_drawing_pos tl x
+  tl.current_epoch.l +. local_time_of_drawing_pos tl x
 
 let drawing_pos_of_time tl t =
-  let t = Time.truncate tl.current_span t in
-  chart_left tl +. pixels_per_time tl *. (t -. tl.current_span.l)
+  let t = Time.truncate tl.current_epoch t in
+  chart_left tl +. pixels_per_time tl *. (t -. tl.current_epoch.l)
 
 (* Derived graphical parameters *)
 
@@ -176,6 +176,12 @@ let y_pos_of_processor_chart tl p =
 
 let y_pos_of_processor_label tl p =
   y_pos_of_processor_chart tl p +. height_per_processor_bar tl /. 2.
+
+let chart_visible_height tl =
+  let always_visible =
+    int_of_float tl.scale_bar_height + tl.hsc#misc#allocation.Gtk.height
+  in
+  float (tl.tbl#misc#allocation.Gtk.height - always_visible)
 
 (* Misc *)
 
@@ -201,12 +207,11 @@ let selection_right_side tl u =
 
 let configure_scrollbars tl =
   (* Horizontal scrollbar *)
-  tl.hsc#adjustment#set_lower tl.global_span.l;
-  tl.hsc#adjustment#set_upper tl.global_span.u;
-  tl.hsc#adjustment#set_value tl.current_span.l;
-  tl.hsc#adjustment#set_page_size (Time.range tl.current_span);
+  tl.hsc#adjustment#set_lower tl.global_epoch.l;
+  tl.hsc#adjustment#set_upper tl.global_epoch.u;
+  tl.hsc#adjustment#set_value tl.current_epoch.l;
+  tl.hsc#adjustment#set_page_size (Time.range tl.current_epoch);
   tl.hsc#adjustment#set_step_increment (time_per_increment tl);
-  (* Vertical scrollbar *)
   ()
 
 let redraw tl =
@@ -215,17 +220,17 @@ let redraw tl =
 
 (* High-level drawing functions *)
 
-let draw_span ~y ~h tl cr s =
+let draw_epoch ~y ~h tl cr s =
   let x0 = drawing_pos_of_time tl s.l in
   let x1 = drawing_pos_of_time tl s.u in
   let w = max (x1 -. x0) 1. in
   Cairo.rectangle cr ~x:x0 ~y ~w ~h;
   Cairo.fill cr
 
-let draw_span_on_processor ~p tl cr s =
+let draw_epoch_on_processor ~p tl cr s =
   let y = y_pos_of_processor_chart tl p in
   let h = tl.proc_chart_height in
-  draw_span ~y ~h tl cr s
+  draw_epoch ~y ~h tl cr s
 
 let draw_event_on_processor ~p tl cr t =
   let x = drawing_pos_of_time tl t in
@@ -332,7 +337,7 @@ let draw_processor_chart tl cr =
   for p = 0 to tl.number_of_processors - 1 do
     (* Draw the default per-processor activity background. *)
     set_rgba cr tl.color_proc_active;
-    draw_span_on_processor ~p tl cr tl.current_span;
+    draw_epoch_on_processor ~p tl cr tl.current_epoch;
 
     (* Draw activites. We do not draw the ones that are really small in order to
     try to lower query cost on huge files. *)
@@ -344,9 +349,9 @@ let draw_processor_chart tl cr =
       tl.get_activities
         ~kind
         ~for_proc:p
-        ~between:tl.current_span
+        ~between:tl.current_epoch
         ~min_duration
-      |> List.iter (draw_span_on_processor ~p tl cr)
+      |> List.iter (draw_epoch_on_processor ~p tl cr)
     in
 
     List.iter draw_activities_of_kind tl.activities;
@@ -356,7 +361,7 @@ let draw_processor_chart tl cr =
       tl.get_events
         ~kind
         ~for_proc:p
-        ~between:tl.current_span
+        ~between:tl.current_epoch
       |> List.iter (draw_event_on_processor ~p tl cr)
     in
 
@@ -447,15 +452,15 @@ let configure tl _ =
 
 let scrollbar_value_changed tl () =
   let l = tl.hsc#adjustment#value in
-  let u = l +. Time.range tl.current_span in
-  tl.current_span <- { l; u; };
+  let u = l +. Time.range tl.current_epoch in
+  tl.current_epoch <- { l; u; };
   redraw tl;
   ()
 
 (* Construction function *)
 
 let make
-      ~global_span
+      ~global_epoch
       ~number_of_processors
       ~get_activities
       ~get_events
@@ -519,8 +524,8 @@ let make
     {
       number_of_processors;
 
-      global_span;
-      current_span = global_span;
+      global_epoch;
+      current_epoch = global_epoch;
 
       current_selection = None;
       selection_in_progress = false;
@@ -580,7 +585,7 @@ let add_event ~kind ~color tl =
   redraw tl
 
 let zoom_to_global tl =
-  tl.current_span <- tl.global_span;
+  tl.current_epoch <- tl.global_epoch;
   selection_reset tl;
   redraw tl
 
@@ -589,6 +594,6 @@ let zoom_to_selection tl =
   | None ->
      ()
   | Some s ->
-     tl.current_span <- s;
+     tl.current_epoch <- s;
      selection_reset tl;
      redraw tl

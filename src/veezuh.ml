@@ -72,7 +72,7 @@ let open_trace_window filename =
 
   let tl' =
     Pure_timeline.make
-      ~global_span:(Trace.time_span trace)
+      ~global_epoch:(Trace.epoch trace)
       ~number_of_processors
       ~get_activities
       ~get_events

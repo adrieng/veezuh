@@ -201,7 +201,7 @@ let draw_events_of_kinds
 class timeline ~packing trace =
   let pcount = Trace.number_of_processors trace in
 
-  let { Time.l = min_time; Time.u = max_time; } = Trace.time_span trace in
+  let { Time.l = min_time; Time.u = max_time; } = Trace.epoch trace in
 
   let sw = GBin.scrolled_window ~packing:packing () in
 
