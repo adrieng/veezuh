@@ -1,507 +1,685 @@
-open Cairo
 open Utils
+open Range
 
-let draw_background
-      ~width
-      ~height
-      cr =
-  Cairo.set_source_rgb cr 1. 1. 1.;
-  Cairo.rectangle cr 0. 0. width height;
+(* Activities and Events *)
+
+type activity_kind = string
+
+type event_kind = string
+
+type processor = int
+
+(* Callbacks *)
+
+type get_activities_callback =
+  kind:activity_kind ->
+  for_proc:processor ->
+  between:span ->
+  min_duration:float ->
+  Range.span list
+
+type get_events_callback =
+  kind:event_kind ->
+  for_proc:processor ->
+  between:span ->
+  float list
+
+(* The Timeline control *)
+
+(* Some terminological conventions:
+
+      raw time = absolute time, used to communicate with the outside
+   global time = time since the start of the global span
+    local time = time since the start of the current span
+
+   drawing pos = position in the drawing area
+     chart pos = position in the chart inside the drawing area
+
+   The various epochs (global, local, selection) are stored in raw time.
+ *)
+
+type t =
+  {
+    (* Global immutable parameters *)
+
+    number_of_processors : int;
+
+    (* Time parameters *)
+
+    global_epoch : Range.span;
+
+    mutable current_epoch : Range.span;
+
+    mutable current_visible_chart_top : float;
+
+    (* Selection parameters *)
+
+    mutable current_selection : Range.span option;
+
+    mutable selection_in_progress : bool;
+
+    (* Visual parameters *)
+
+    left_margin : int;
+
+    color_background : Utils.rgb;
+
+    color_selection : Utils.rgba;
+
+    color_proc_active : Utils.rgba;
+
+    scroll_zoom_factor : float;
+
+    alpha_selection : float;
+
+    scale_bar_number_of_increments : int;
+
+    scale_bar_thickness : float;
+
+    scale_bar_increments_height : float;
+
+    scale_bar_increments_thickness : float;
+
+    scale_bar_height : float;
+
+    proc_chart_vertical_spacing : float;
+
+    proc_chart_height : float;
+
+    selection_bar_thickness : float;
+
+    event_mark_thickness : float;
+
+    event_mark_radius : float;
+
+    activity_duration_factor : float;
+
+    (* Activities and events *)
+
+    get_activities : get_activities_callback;
+
+    get_events : get_events_callback;
+
+    mutable activities : (activity_kind * Utils.rgba) list;
+
+    mutable events : (event_kind * Utils.rgba) list;
+
+    (* Gtk controls *)
+
+    tbl : GPack.table;
+
+    da : GMisc.drawing_area;
+
+    vsc : GRange.range;
+
+    hsc : GRange.range;
+  }
+
+(* Functions computing layout positions *)
+
+let width tl =
+  float tl.da#misc#allocation.Gtk.width
+
+let height tl =
+  float tl.da#misc#allocation.Gtk.height
+
+let chart_left tl =
+  float tl.left_margin
+
+let chart_right tl =
+  width tl
+
+let chart_top tl =
+  tl.scale_bar_height
+
+let chart_width tl =
+  chart_right tl -. chart_left tl
+
+let chart_height tl =
+  height tl -. chart_top tl
+
+let chart_dim tl =
+  chart_width tl, chart_height tl
+
+(* Conversion functions between time and graphical space *)
+
+let current_epoch_range tl =
+  Range.range tl.current_epoch
+
+let time_per_pixel tl =
+  current_epoch_range tl /. chart_width tl
+
+let time_per_increment tl =
+  current_epoch_range tl /. float tl.scale_bar_number_of_increments
+
+let pixels_per_time tl =
+  chart_width tl /. current_epoch_range tl
+
+let pixels_per_increment tl =
+  chart_width tl /. float tl.scale_bar_number_of_increments
+
+let local_time_of_drawing_pos tl x =
+  time_per_pixel tl *. (x -. chart_left tl)
+
+let global_time_of_drawing_pos tl x =
+  local_time_of_drawing_pos tl x +. tl.current_epoch.l -. tl.global_epoch.l
+
+let raw_time_of_drawing_pos tl x =
+  tl.current_epoch.l +. local_time_of_drawing_pos tl x
+
+let drawing_pos_of_time tl t =
+  let t = Range.truncate tl.current_epoch t in
+  chart_left tl +. pixels_per_time tl *. (t -. tl.current_epoch.l)
+
+let chart_pos_of_drawing_pos tl x =
+  let x = Range.truncate { l = chart_left tl; u = chart_right tl; } x in
+  x -. chart_left tl
+
+(* Derived graphical parameters *)
+
+let height_per_processor_bar tl =
+  tl.proc_chart_height +. tl.proc_chart_vertical_spacing
+
+let chart_preferred_height tl =
+  height_per_processor_bar tl *. float tl.number_of_processors
+  +. tl.scale_bar_height
+
+let position_of_increment tl i =
+  chart_left tl +. pixels_per_increment tl *. float i
+
+let first_visible_processor tl =
+  let top = int_of_float tl.current_visible_chart_top in
+  let hpp = int_of_float @@ height_per_processor_bar tl in
+  top / hpp
+
+let number_of_visible_processors tl =
+  let number_of_processor_bars =
+    ceil (chart_height tl /. height_per_processor_bar tl)
+  in
+  min tl.number_of_processors (int_of_float number_of_processor_bars)
+
+let visible_processors tl =
+  let first = first_visible_processor tl in
+  let last = first + number_of_visible_processors tl - 1 in
+  first, last
+
+let y_pos_of_processor_chart tl p =
+  let p = p - first_visible_processor tl in
+  if p < 0
+  then
+    Format.eprintf
+      "WARNING: asking for position of processor %d which is not visible@."
+      p;
+  let p = max 0 p in
+  chart_top tl +. float p *. height_per_processor_bar tl
+
+let y_pos_of_processor_label tl p =
+  y_pos_of_processor_chart tl p +. height_per_processor_bar tl /. 2.
+
+(* Misc *)
+
+let current_unit_scaling tl =
+  find_good_unit_scaling @@ time_per_increment tl
+
+let truncate_pos_to_chart tl x =
+  Range.truncate { l = chart_left tl; u = chart_right tl; } x
+
+(* Selection-related things *)
+
+let selection_reset tl =
+  tl.current_selection <- None
+
+let selection_discrete tl t =
+  tl.current_selection <- Some { l = t; u = t; }
+
+let selection_right_side tl u =
+  match tl.current_selection with
+  | None ->
+     selection_discrete tl u
+  | Some { l; _ } ->
+     tl.current_selection <- Some { l; u; }
+
+(* Low-level Gtk+ stuff *)
+
+let configure_scrollbars tl =
+  (* Horizontal scrollbar *)
+  tl.hsc#adjustment#set_lower tl.global_epoch.l;
+  tl.hsc#adjustment#set_upper tl.global_epoch.u;
+  tl.hsc#adjustment#set_value tl.current_epoch.l;
+  tl.hsc#adjustment#set_page_size (current_epoch_range tl);
+  tl.hsc#adjustment#set_step_increment (time_per_increment tl);
+  (* Vertical scrollbar *)
+  tl.vsc#adjustment#set_lower 0.;
+  tl.vsc#adjustment#set_upper (chart_preferred_height tl);
+  tl.vsc#adjustment#set_value tl.current_visible_chart_top;
+  tl.vsc#adjustment#set_page_size (chart_height tl);
+  ()
+
+let redraw ?(scrollbars = false) tl =
+  if scrollbars then configure_scrollbars tl;
+  GtkBase.Widget.queue_draw tl.da#as_widget
+
+(* High-level drawing functions *)
+
+let draw_epoch ~y ~h tl cr s =
+  let x0 = drawing_pos_of_time tl s.l in
+  let x1 = drawing_pos_of_time tl s.u in
+  let w = max (x1 -. x0) 1. in
+  Cairo.rectangle cr ~x:x0 ~y ~w ~h;
+  Cairo.fill cr
+
+let draw_epoch_on_processor ~p tl cr s =
+  let y = y_pos_of_processor_chart tl p in
+  let h = tl.proc_chart_height in
+  draw_epoch ~y ~h tl cr s
+
+let draw_event_on_processor ~p tl cr t =
+  let x = drawing_pos_of_time tl t in
+  let y = y_pos_of_processor_chart tl p in
+  let h = tl.proc_chart_height in
+
+  let draw_bullet y =
+    let x = middle x (x +. tl.event_mark_radius) in
+    Cairo.arc cr ~x ~y ~r:tl.event_mark_radius ~a1:0. ~a2:pi2
+  in
+
+  draw_bullet (y +. tl.event_mark_radius);
+  draw_bullet (y +. h -. tl.event_mark_radius);
+  Cairo.rectangle cr ~x ~y ~w:tl.event_mark_thickness ~h;
+  Cairo.fill cr
+
+(* Top-level functions *)
+
+let draw_background tl cr =
+  (* Fill background color *)
+
+  set_rgb cr tl.color_background;
+  Cairo.rectangle
+    cr
+    ~x:(chart_left tl)
+    ~y:(chart_top tl)
+    ~w:(chart_width tl)
+    ~h:(chart_height tl);
   Cairo.fill cr;
+
+  (* Draw vertical bars. *)
+  for i = 0 to tl.scale_bar_number_of_increments - 1 do
+    let x = position_of_increment tl i in
+    Cairo.set_source_rgba cr 0. 0. 0. 0.4;
+    Cairo.rectangle cr ~x ~y:(chart_top tl) ~w:1. ~h:(chart_height tl);
+    Cairo.fill cr
+  done;
+
   ()
 
 let draw_scale_bar
-      ~number_of_increments
-      ~thickness
-      ~increments_height
-      ~width
-      ~height
-      ~min_time
-      ~cur_min_time
-      ~cur_max_time
-      cr =
-  Cairo.translate cr 0. (height -. 1.);
+      tl
+      cr
+  =
+  let w, h = chart_dim tl in
 
   set_black cr;
 
   (* Draw the main axis. *)
-  Cairo.set_line_width cr thickness;
-  Cairo.move_to cr 0. 0.;
-  Cairo.line_to cr width 0.;
-  Cairo.stroke cr;
+  Cairo.rectangle
+    cr
+    ~x:(chart_left tl)
+    ~y:(tl.scale_bar_height -. tl.scale_bar_thickness)
+    ~w
+    ~h:tl.scale_bar_thickness;
+  Cairo.fill cr;
 
   (* Draw the increments *)
 
-  let pixels_per_increment = width /. float number_of_increments in
-  let total_time = cur_max_time -. cur_min_time in
-  let time_per_increment = total_time /. float number_of_increments in
-
   let draw_increment ?(label = "") x =
-    let y = -. increments_height -. thickness in
-    (* Draw increment bar *)
-    Cairo.move_to cr x 0.;
-    Cairo.line_to cr x y;
-    Cairo.stroke cr;
+    let y = tl.scale_bar_height -. tl.scale_bar_thickness in
+    (* Draw the increment bar *)
+    Cairo.rectangle
+      cr
+      ~x
+      ~y
+      ~w:tl.scale_bar_increments_thickness
+      ~h:(-. tl.scale_bar_increments_height);
+    Cairo.fill cr;
+
     (* Draw increment label, if any *)
-    Cairo.move_to cr (x +. 2.) (-. 5.);
+    Cairo.move_to
+      cr
+      ~x:x
+      ~y:(y -. tl.scale_bar_increments_height -. 4.);
     Cairo.Path.text cr label;
     Cairo.stroke cr;
   in
 
-  let t_scale, pref = find_good_unit_scaling time_per_increment in
+  let t_scale, pref = current_unit_scaling tl in
 
   Cairo.set_line_width cr 1.;
-  for i = 0 to number_of_increments - 1 do
-    let x = float i *. pixels_per_increment in
-    (* Draw small label *)
-    let x_time = float i *. time_per_increment +. cur_min_time -. min_time in
-    let x_time = x_time *. t_scale in
-    let label = Printf.sprintf "%.2f %s" x_time pref in
+  for i = 0 to tl.scale_bar_number_of_increments - 1 do
+    let x = position_of_increment tl i in
+    let t = global_time_of_drawing_pos tl x *. t_scale in
+    let label = Printf.sprintf "%.2f %s" t pref in
+    (* Draw the small increment bar *)
     draw_increment ~label x;
   done;
 
-  draw_increment width;
-
   ()
-;;
 
-let draw_processor_chart
-      ?(color_user = (0., 1., 0.2, 0.2))
-      ?(color_gc = (1., 0., 0.5, 1.))
-      ~width
-      ~height
-      ~cur_min_time
-      ~cur_max_time
-      ~processor
-      ~trace
-      cr =
-  (* Draw the "P XXX" label. *)
-  let label = "P" ^ string_of_int processor in
-  let label_extent = Cairo.text_extents cr label in
+let draw_legend tl cr =
+  let p_min, p_max = visible_processors tl in
   set_black cr;
-  Cairo.move_to
-    cr
-    (-. label_extent.width -. 5.)
-    (height /. 2. +. label_extent.height /. 2.);
-  Cairo.Path.text cr label;
-  Cairo.stroke cr;
-
-  (* By default, a processor is considered active. *)
-  set_rgba cr color_user;
-  Cairo.rectangle cr 0. 0. width height;
-  Cairo.fill cr;
-
-  (* Draw GC period *)
-  set_rgba cr color_gc;
-
-  let total_time = cur_max_time -. cur_min_time in
-  let x_ratio = width /. total_time in
-
-  let draw_gc_period { Range.l = start; Range.u = stop; } =
-    (* start and stop are in absolute time, we have to translate them first to
-       local time, then to x coordinates. *)
-    let l_start = start -. cur_min_time in
-    let l_stop = stop -. cur_min_time in
-    let x_start = l_start *. x_ratio in
-    let x_stop = l_stop *. x_ratio in
-    let width = max (x_stop -. x_start) 1. in
-    Cairo.rectangle cr x_start 0. width height;
-    Cairo.fill cr
-  in
-
-  let gc_periods =
-    Trace.gc_periods_between
-      ~between:Range.{ l = cur_min_time; u = cur_max_time; }
-      ~min_duration:0.000000001
-      ~proc:processor
-      trace
-  in
-  List.iter draw_gc_period gc_periods;
-
+  for p = p_min to p_max do
+    let y = y_pos_of_processor_label tl p in
+    Cairo.move_to cr ~x:10. ~y;
+    Cairo.Path.text cr ("Processor " ^ string_of_int p);
+    Cairo.stroke cr
+  done;
   ()
-;;
 
-let draw_selection
-      ?(color = (0., 0.2, 1.))
-      ?(alpha_interior = 0.3)
-      ~bar_thickness
-      ~height
-      ~x_start
-      ~x_stop
-      cr =
-  set_rgb cr color;
+let draw_processor_chart tl cr =
+  let p_min, p_max = visible_processors tl in
+  for p = p_min to p_max do
+    (* Draw the default per-processor activity background. *)
+    set_rgba cr tl.color_proc_active;
+    draw_epoch_on_processor ~p tl cr tl.current_epoch;
 
-  let draw_vertical_bar x =
-    Cairo.rectangle cr x 0. bar_thickness height;
-    Cairo.fill cr
-  in
+    (* Draw activites. We do not draw the ones that are really small in order to
+    try to lower query cost on huge files. *)
 
-  let draw_intermediate_zone () =
-    let (r, g, b), a = color, alpha_interior in
-    let width = x_stop -. x_start in
-    Cairo.set_source_rgba cr ~r ~g ~b ~a:alpha_interior;
-    Cairo.rectangle cr x_start 0. width height;
-    Cairo.fill cr
-  in
+    let min_duration = time_per_pixel tl /. tl.activity_duration_factor in
 
-  draw_vertical_bar x_start;
-  if x_stop <> x_start then
-    begin
-      draw_vertical_bar x_stop;
-      draw_intermediate_zone ();
-    end;
-
-  ()
-;;
-
-let draw_events_of_kinds
-      ~mark_thickness
-      ~mark_radius
-      ~height
-      ~width
-      ~cur_min_time
-      ~cur_max_time
-      ~processor
-      ~kinds
-      ~trace
-      cr =
-  let draw_events_of_kind (kind, color) =
-    let events =
-      Trace.events_between
-        ~between:Range.{ l = cur_min_time; u = cur_max_time; }
-        ~proc:processor
+    let draw_activities_of_kind (kind, color) =
+      Utils.set_rgba cr color;
+      tl.get_activities
         ~kind
-        trace
+        ~for_proc:p
+        ~between:tl.current_epoch
+        ~min_duration
+      |> List.iter (draw_epoch_on_processor ~p tl cr)
     in
 
-    (* TODO factor out *)
-    let x_ratio = width /. (cur_max_time -. cur_min_time) in
-    let pos_of_time t = (t -. cur_min_time) *. x_ratio in
+    List.iter draw_activities_of_kind tl.activities;
 
-    set_rgba cr color;
-
-    let draw_event_mark t =
-      let x = pos_of_time t in
-      let draw_bullet y =
-        let x = middle x (x +. mark_radius) in
-        Cairo.arc cr ~x ~y ~r:mark_radius ~a1:0. ~a2:pi2
-      in
-
-      Cairo.rectangle cr ~x ~y:0. ~w:mark_thickness ~h:height;
-      draw_bullet 0.;
-      draw_bullet height;
-      Cairo.fill cr
+    let draw_events_of_kind (kind, color) =
+      Utils.set_rgba cr color;
+      tl.get_events
+        ~kind
+        ~for_proc:p
+        ~between:tl.current_epoch
+      |> List.iter (draw_event_on_processor ~p tl cr)
     in
 
-    List.iter draw_event_mark events
-  in
-  List.iter draw_events_of_kind kinds
+    List.iter draw_events_of_kind tl.events;
+  done;
+  ()
+
+let draw_selection tl cr =
+  match tl.current_selection with
+  | None ->
+     ()
+  | Some s ->
+     set_rgba cr tl.color_selection;
+
+     let x_l = drawing_pos_of_time tl s.l in
+     let x_u = drawing_pos_of_time tl s.u in
+     let y = chart_top tl in
+     let h = chart_height tl in
+
+     let draw_vertical_bar x =
+       Cairo.rectangle
+         cr
+         ~x
+         ~y
+         ~w:tl.selection_bar_thickness
+         ~h;
+       Cairo.fill cr
+     in
+
+     let draw_intermediate_zone () =
+       let r, g, b, _ = tl.color_selection in
+       let w = x_u -. x_l in
+       Cairo.set_source_rgba cr ~r ~g ~b ~a:tl.alpha_selection;
+       Cairo.rectangle cr ~x:x_l ~y ~w ~h;
+       Cairo.fill cr
+     in
+
+     draw_vertical_bar x_l;
+     if x_l <> x_u then
+       begin
+         draw_vertical_bar x_u;
+         draw_intermediate_zone ();
+       end;
+     ()
 ;;
 
-class timeline ~packing trace =
-  let pcount = Trace.number_of_processors trace in
+let draw_timeline tl cr =
+  draw_background tl cr;
+  draw_scale_bar tl cr;
+  draw_legend tl cr;
+  draw_processor_chart tl cr;
+  draw_selection tl cr;
+  ()
+;;
 
-  let { Range.l = min_time; Range.u = max_time; } = Trace.epoch trace in
+(* High-level actions *)
 
-  let sw = GBin.scrolled_window ~packing:packing () in
+let change_current_epoch ~epoch tl =
+  tl.current_epoch <- Range.clip ~within:tl.global_epoch epoch;
+  redraw ~scrollbars:true tl
 
-  let da = GMisc.drawing_area ~packing:sw#add_with_viewport () in
+let zoom ~x ~factor tl =
+  let xr = x /. chart_width tl in
+  let latt = if xr < 0.1 then 0. else 1. in
+  let ratt = if xr > 0.9 then 0. else 1. in
+  let lchange = current_epoch_range tl *. factor *. latt *. xr in
+  let rchange = current_epoch_range tl *. factor *. ratt *. (1. -. xr) in
+  change_current_epoch
+    ~epoch:{ l = tl.current_epoch.l +. lchange;
+             u = tl.current_epoch.u -. rchange; }
+    tl;
+  ()
 
-  object (self)
-    inherit GObj.widget da#as_widget
+let zoom_in ~x tl =
+  zoom ~x ~factor:tl.scroll_zoom_factor tl;
+  ()
 
-    (* Time-related fields *)
+let zoom_out ~x tl =
+  zoom ~x ~factor:(-. tl.scroll_zoom_factor) tl;
+  ()
 
-    val mutable cur_min_time = min_time
+(* Gtk callbacks *)
 
-    val mutable cur_max_time = max_time
+let click tl pressed e =
+  let x = GdkEvent.Button.x e in
+  let t = raw_time_of_drawing_pos tl x in
+  let button = GdkEvent.Button.button e in
+  if button = 1 then
+    begin
+      if pressed then selection_discrete tl t;
+      tl.selection_in_progress <- not tl.selection_in_progress;
+      redraw tl;
+    end;
+  false
 
-    val mutable cur_sel_start = min_time
+let move tl e =
+  let x = GdkEvent.Motion.x e in
+  let u = raw_time_of_drawing_pos tl x in
+  if tl.selection_in_progress
+  then
+    begin
+      selection_right_side tl u;
+      redraw tl
+    end;
+  false
 
-    val mutable cur_sel_stop = min_time
+let expose tl _ =
+  draw_timeline tl @@ Cairo_gtk.create tl.da#misc#window;
+  false
 
-    (* Trace event-related fields *)
+let configure tl _ =
+  configure_scrollbars tl;
+  false
 
-    (* Which event kinds to print *)
-    val mutable cur_selected_kinds = []
+let scrollbar_value_changed tl () =
+  (* Horizontal scrollbar *)
+  let l = tl.hsc#adjustment#value in
+  let u = l +. current_epoch_range tl in
+  tl.current_epoch <- { l; u; };
+  (* Vertical scrollbar *)
+  tl.current_visible_chart_top <- tl.vsc#adjustment#value;
+  redraw tl;
+  ()
 
-    (* State-machine fields *)
+let mouse_wheel tl e =
+  let state = GdkEvent.Scroll.state e in
+  let modifiers = Gdk.Convert.modifier state in
+  if List.mem `CONTROL modifiers
+  then begin
+      let x = chart_pos_of_drawing_pos tl @@ GdkEvent.Scroll.x e in
+      match GdkEvent.Scroll.direction e with
+      | `UP ->
+         zoom_in ~x tl
+      | `DOWN ->
+         zoom_out ~x tl
+      | _ ->
+         ()
+    end;
+  false
 
-    val mutable selection_in_progress = false
+(* Construction function *)
 
-    (* Appareance-related fields *)
-
-    val scroll_zoom_factor = 0.05
-
-    val scale_bar_number_of_increments = 10
-
-    val scale_bar_thickness = 1.
-
-    val scale_bar_increments_height = 4.
-
-    val scale_bar_height = 20.
-
-    val proc_chart_vertical_spacing = 2.
-
-    val proc_chart_height = 30.
-
-    val event_bar_thickness = 1.
-
-    val event_mark_thickness = 2.
-
-    val event_mark_radius = 2.
-
-    (* Methods computing appearance-related things *)
-
-    method chart_height () =
-      float pcount *. (proc_chart_height +. proc_chart_vertical_spacing)
-
-    method height () =
-      scale_bar_height +. self#chart_height ()
-
-    method width () =
-      let al = sw#misc#allocation in
-      float (al.Gtk.width - 10)
-
-    method chart_width () =
-      self#width () *. 0.9
-
-    method chart_x_min () =
-      (self#width () -. self#chart_width ()) *. 0.9
-
-    method chart_x_max () =
-      self#chart_x_min () +. self#chart_width ()
-
-    (* Methods computing time-related things *)
-
-    method cur_time_span () =
-      cur_max_time -. cur_min_time
-
-    method truncate_x_to_chart x =
-      min (max x (self#chart_x_min ())) (self#chart_x_max ())
-
-    method truncate_time_to_cur_time_span t =
-      min (max t cur_min_time) cur_max_time
-
-    method time_to_chart_pos x =
-      let x = x -. cur_min_time in
-      (self#chart_width () /. self#cur_time_span ()) *. x
-
-    method absolute_pos_to_time x =
-      let x = x -. self#chart_x_min () in
-      cur_min_time +. (self#cur_time_span () /. self#chart_width ()) *. x
-
-    (* Methods for low-level access *)
-
-    method repaint () =
-      GtkBase.Widget.queue_draw da#as_widget
-
-    (* Methods updating zoom level *)
-
-    method zoom_to new_min_time new_max_time =
-      cur_min_time <- max min_time new_min_time;
-      cur_max_time <- min max_time new_max_time;
-      (* Truncate selection *)
-      self#set_sel_start cur_sel_start;
-      self#set_sel_stop cur_sel_stop;
-      (* Ask GTK to send an expose event *)
-      self#repaint ()
-
-    method zoom_adjust x_prop zoom_factor =
-      let adjustment = zoom_factor *. self#cur_time_span () in
-
-      let start_adjustment =
-        if x_prop <= 0.2 then 0. else adjustment *. x_prop
-      in
-      let stop_adjustment =
-        if x_prop >= 0.8 then 0. else adjustment *. (1. -. x_prop)
-      in
-
-      let new_min_time = cur_min_time +. start_adjustment in
-      let new_max_time = cur_max_time -. stop_adjustment in
-      self#zoom_to new_min_time new_max_time
-
-    method zoom_in x_prop =
-      self#zoom_adjust x_prop scroll_zoom_factor
-
-    method zoom_out x_prop =
-      self#zoom_adjust x_prop (-. scroll_zoom_factor)
-
-    method zoom_to_default () =
-      self#zoom_to min_time max_time
-
-    method zoom_to_selection () =
-      if cur_sel_start <> cur_sel_stop then
-        begin
-          let left = min cur_sel_start cur_sel_stop in
-          let right = max cur_sel_start cur_sel_stop in
-          self#zoom_to left right;
-          self#reset_selection ();
-        end;
+let make
+      ~global_epoch
+      ~number_of_processors
+      ~get_activities
+      ~get_events
+      ~packing
+      () =
+  let tbl =
+    GPack.table
+      ~columns:2
+      ~rows:2
+      ~row_spacings:0
+      ~col_spacings:0
+      ~border_width:0
+      ~homogeneous:false
+      ~packing
       ()
+  in
 
-    (* Methods updating selection *)
+  let left_margin = 100 in
+  let color_background = Utils.white_rgb in
+  let color_selection = 0., 0.2, 1., 1. in
+  let color_proc_active = 0.05, 0.05, 0.05, 0.08 in
+  let alpha_selection = 0.3 in
+  let scroll_zoom_factor = 0.1 in
+  let scale_bar_number_of_increments = 10 in
+  let scale_bar_thickness = 3. in
+  let scale_bar_increments_height = 5. in
+  let scale_bar_increments_thickness = 1.5 in
+  let scale_bar_height = 30. in
+  let proc_chart_vertical_spacing = 2. in
+  let proc_chart_height = 40. in
+  let selection_bar_thickness = 2. in
+  let event_mark_thickness = 2. in
+  let event_mark_radius = 2.5 in
+  let activity_duration_factor = 100. in
 
-    method set_sel_start start =
-      cur_sel_start <- self#truncate_time_to_cur_time_span start
-
-    method set_sel_stop stop =
-      cur_sel_stop <- self#truncate_time_to_cur_time_span stop
-
-    method reset_selection () =
-      cur_sel_start <- cur_min_time;
-      cur_sel_stop <- cur_min_time;
-      self#repaint ()
-
-    (* Methods updating selection *)
-
-    method toggle_kind event_kind color =
-      if List.mem_assoc event_kind cur_selected_kinds
-      then
-        cur_selected_kinds <- List.remove_assoc event_kind cur_selected_kinds
-      else
-        cur_selected_kinds <- (event_kind, color) :: cur_selected_kinds;
-      self#repaint ();
+  let da =
+    GMisc.drawing_area
+      ~packing:(tbl#attach ~top:0 ~left:0 ~expand:`BOTH)
       ()
-
-    (* Event handlers *)
-
-    method on_expose () =
-      let cr = Cairo_gtk.create da#misc#window in
-      let chart_width = self#chart_width () in
-      let chart_offset = self#chart_x_min () in
-
-      let chart_matrix () =
-        Cairo.identity_matrix cr;
-        Cairo.translate cr chart_offset scale_bar_height;
-      in
-
-      (* Draw the scale bar *)
-      Cairo.translate cr chart_offset 0.;
-      draw_scale_bar
-        ~number_of_increments:scale_bar_number_of_increments
-        ~thickness:scale_bar_thickness
-        ~increments_height:scale_bar_increments_height
-        ~width:chart_width
-        ~height:scale_bar_height
-        ~min_time
-        ~cur_min_time
-        ~cur_max_time
-        cr;
-
-      chart_matrix ();
-
-      (* Draw each processor's chart *)
-      for p = 0 to pcount - 1 do
-        Cairo.translate ~x:0. ~y:proc_chart_vertical_spacing cr;
-        draw_processor_chart
-          ~width:chart_width
-          ~height:proc_chart_height
-          ~cur_min_time
-          ~cur_max_time
-          ~processor:p
-          ~trace
-          cr;
-        draw_events_of_kinds
-          ~mark_thickness:event_mark_thickness
-          ~mark_radius:event_mark_radius
-          ~width:chart_width
-          ~height:proc_chart_height
-          ~cur_min_time
-          ~cur_max_time
-          ~processor:p
-          ~kinds:cur_selected_kinds
-          ~trace
-          cr;
-        Cairo.translate ~x:0. ~y:proc_chart_height cr
-      done;
-      Cairo.identity_matrix cr;
-
-      chart_matrix ();
-
-      draw_selection
-        ~bar_thickness:event_bar_thickness
-        ~height:(self#chart_height ())
-        ~x_start:(self#time_to_chart_pos cur_sel_start)
-        ~x_stop:(self#time_to_chart_pos cur_sel_stop)
-        cr;
-
-      flush stderr;
+  in
+  let vsc =
+    GRange.scrollbar
+      `VERTICAL
+      ~packing:(tbl#attach ~top:0 ~left:1 ~shrink:`BOTH)
       ()
-
-    method on_scroll e =
-      let state = GdkEvent.Scroll.state e in
-      let modifiers = Gdk.Convert.modifier state in
-      if List.mem `CONTROL modifiers
-      then
-        let x_px = self#truncate_x_to_chart (GdkEvent.Scroll.x e) in
-        let x_relpos = (x_px -. self#chart_x_min ()) /. self#chart_width () in
-        match GdkEvent.Scroll.direction e with
-        | `UP ->
-           self#zoom_in x_relpos
-        | `DOWN ->
-           self#zoom_out x_relpos
-        | _ ->
-           ()
-
-    method on_configure e =
-      let width = GdkEvent.Configure.width e - 10 in
-      let height = int_of_float @@ self#height () in
-      da#misc#set_size_request ~width ~height ();
+  in
+  let hsc =
+    GRange.scrollbar
+      `HORIZONTAL
+      ~packing:(tbl#attach ~top:1 ~left:0 ~shrink:`BOTH)
       ()
+  in
 
-    method on_click pressed e =
-      let x = GdkEvent.Button.x e in
-      let x_time = self#absolute_pos_to_time x in
-      let button = GdkEvent.Button.button e in
-      if button = 1 then
-        begin
-          if pressed then
-            begin
-              self#set_sel_start x_time;
-              self#set_sel_stop x_time
-            end;
-          selection_in_progress <- not selection_in_progress;
-          self#repaint ()
-        end;
-      ()
+  let tl =
+    {
+      number_of_processors;
 
-    method on_mouse_motion e =
-      let x = GdkEvent.Motion.x e in
-      let x_time = self#absolute_pos_to_time x in
-      if selection_in_progress
-      then
-        begin
-          self#set_sel_stop x_time;
-          self#repaint ()
-        end;
-      ()
+      global_epoch;
+      current_epoch = global_epoch;
+      current_visible_chart_top = 0.;
 
-    (* Initialization code *)
+      current_selection = None;
+      selection_in_progress = false;
 
-    initializer
-    sw#set_hpolicy `AUTOMATIC;
-    sw#set_vpolicy `AUTOMATIC;
-    (* Expose and configure events *)
-    let expose _ = self#on_expose (); false in
-    ignore @@ da#event#connect#expose ~callback:expose;
-    let configure e = self#on_configure e; false in
-    ignore @@ da#event#connect#configure ~callback:configure;
-    (* Scroll and click events *)
-    let scroll e = self#on_scroll e; false in
-    ignore @@ da#event#connect#scroll ~callback:scroll;
-    let click pressed e = self#on_click pressed e; false in
-    ignore @@ da#event#connect#button_press ~callback:(click true);
-    ignore @@ da#event#connect#button_release ~callback:(click false);
-    let motion e = self#on_mouse_motion e; false in
-    ignore @@ da#event#connect#motion_notify ~callback:motion;
-    ignore @@
-      da#event#add
-        [
-          `SCROLL;
-          `BUTTON_PRESS;
-          `BUTTON_RELEASE;
-          `POINTER_MOTION;
-        ];
-    ()
-  end
+      left_margin;
+      color_background;
+      color_proc_active;
+      color_selection;
+      alpha_selection;
+      scroll_zoom_factor;
+      scale_bar_number_of_increments;
+      scale_bar_thickness;
+      scale_bar_increments_height;
+      scale_bar_increments_thickness;
+      scale_bar_height;
+      proc_chart_vertical_spacing;
+      proc_chart_height;
+      selection_bar_thickness;
+      event_mark_thickness;
+      event_mark_radius;
+      activity_duration_factor;
+
+      get_activities;
+      get_events;
+      activities = [];
+      events = [];
+
+      tbl;
+      da;
+      vsc;
+      hsc;
+    }
+  in
+  ignore @@ da#event#connect#configure ~callback:(configure tl);
+  ignore @@ da#event#connect#expose ~callback:(expose tl);
+  ignore @@ da#event#connect#button_press ~callback:(click tl true);
+  ignore @@ da#event#connect#button_release ~callback:(click tl false);
+  ignore @@ da#event#connect#motion_notify ~callback:(move tl);
+  ignore @@ da#event#connect#scroll ~callback:(mouse_wheel tl);
+  ignore @@
+    da#event#add
+      [
+        `SCROLL;
+        `BUTTON_PRESS;
+        `BUTTON_RELEASE;
+        `POINTER_MOTION;
+      ];
+  ignore @@
+    hsc#adjustment#connect#value_changed
+      ~callback:(scrollbar_value_changed tl);
+  ignore @@
+    vsc#adjustment#connect#value_changed
+      ~callback:(scrollbar_value_changed tl);
+  tl
+
+let add_activity ~kind ~color tl =
+  tl.activities <- (kind, color) :: tl.activities;
+  redraw tl
+
+let add_event ~kind ~color tl =
+  tl.events <- (kind, color) :: tl.events;
+  redraw tl
+
+let zoom_to_global tl =
+  selection_reset tl;
+  change_current_epoch ~epoch:tl.global_epoch tl
+
+let zoom_to_selection tl =
+  match tl.current_selection with
+  | None ->
+     ()
+  | Some epoch ->
+     selection_reset tl;
+     change_current_epoch epoch tl
