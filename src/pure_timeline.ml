@@ -139,8 +139,8 @@ let pixels_per_time tl =
 let pixels_per_increment tl =
   chart_width tl /. float tl.scale_bar_number_of_increments
 
-let relative_time_of_relative_pos tl x =
-  time_per_pixel tl *. x
+let relative_time_of_timeline_pos tl x =
+  time_per_pixel tl *. (x -. chart_left tl)
 
 let position_of_increment tl i =
   chart_left tl +. pixels_per_increment tl *. float i
@@ -261,7 +261,7 @@ let draw_scale_bar
   Cairo.set_line_width cr 1.;
   for i = 0 to tl.scale_bar_number_of_increments - 1 do
     let x = position_of_increment tl i in
-    let t = relative_time_of_relative_pos tl x *. t_scale in
+    let t = relative_time_of_timeline_pos tl x *. t_scale in
     let label = Printf.sprintf "%.2f %s" t pref in
     (* Draw the small increment bar *)
     draw_increment ~label x;
