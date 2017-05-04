@@ -197,6 +197,19 @@ let selection_right_side tl u =
   | Some { l; _ } ->
      tl.current_selection <- Some { l; u; }
 
+(* Low-level Gtk+ stuff *)
+
+let setup_scrollbars tl =
+  tl.hsc#adjustment#set_lower tl.global_span.l;
+  tl.hsc#adjustment#set_upper tl.global_span.u;
+  tl.hsc#adjustment#set_value tl.current_span.l;
+  tl.hsc#adjustment#set_page_size (Time.range tl.current_span);
+  ()
+
+let redraw tl =
+  setup_scrollbars tl;
+  GtkBase.Widget.queue_draw tl.da#as_widget
+
 (* High-level drawing functions *)
 
 let draw_span ~y ~h tl cr s =
@@ -227,9 +240,6 @@ let draw_event_on_processor ~p tl cr t =
   Cairo.fill cr
 
 (* Top-level functions *)
-
-let redraw tl =
-  GtkBase.Widget.queue_draw tl.da#as_widget
 
 let draw_background tl cr =
   (* Fill background color *)
@@ -428,6 +438,13 @@ let expose tl _ =
   draw_timeline tl @@ Cairo_gtk.create tl.da#misc#window;
   false
 
+let scrollbar_value_changed tl () =
+  let l = tl.hsc#adjustment#value in
+  let u = l +. Time.range tl.current_span in
+  tl.current_span <- { l; u; };
+  redraw tl;
+  ()
+
 (* Construction function *)
 
 let make
@@ -541,7 +558,9 @@ let make
         `BUTTON_RELEASE;
         `POINTER_MOTION;
       ];
-
+  ignore @@
+    hsc#adjustment#connect#value_changed
+      ~callback:(scrollbar_value_changed tl);
   tl
 
 let add_activity ~kind ~color tl =
