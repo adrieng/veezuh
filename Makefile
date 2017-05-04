@@ -1,4 +1,4 @@
-.PHONY: all clean uninstall install run
+.PHONY: all clean uninstall install run run_all
 
 all:
 	jbuilder build
@@ -14,3 +14,6 @@ uninstall: all
 
 run: all
 	./_build/default/src/veezuh.exe ./datasets/fib.32.4proc.std.sqlite
+
+run_all: all
+	./_build/default/src/veezuh.exe ./datasets/*.sqlite
