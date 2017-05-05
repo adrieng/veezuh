@@ -29,6 +29,52 @@ let gray_rect ~x ~y ~width ~height cr =
   Cairo.fill cr;
   ()
 
+let rgb_byte_of_rgb_float (r, g, b) =
+  let f x = min 255 (int_of_float (x *. 255.)) in
+  (f r, f g, f b)
+
+let rgb_float_of_rgb_byte (r, g, b) =
+  let f x = float x /. 255. in
+  (f r, f g, f b)
+
+let next_color =
+  let i = ref 0 in
+  let colors =
+    Array.map
+      rgb_float_of_rgb_byte
+      [|
+        (* http://sashat.me/2017/01/11/list-of-20-simple-distinct-colors/ *)
+        (170, 110, 40);
+        (130, 0, 150);
+        (255, 215, 180);
+        (128, 128, 0);
+        (255, 235, 0);
+        (255, 250, 200);
+        (190, 255, 0);
+        (170, 255, 195);
+        (0, 128, 128);
+        (255, 150, 0);
+        (255, 200, 220);
+        (0, 190, 0);
+        (100, 255, 255);
+        (0, 0, 128);
+        (67, 133, 255);
+        (230, 190, 255);
+        (255, 0, 255);
+        (128, 128, 128);
+      |]
+  in
+  fun () ->
+  let c = colors.(!i) in
+  incr i;
+  if !i >= Array.length colors then i := 0;
+  c
+
+let gdk_color_of_rgb_float (r, g, b) =
+  let f x = int_of_float (x *. 65535.) in
+  let r, g, b = f r, f g, f b in
+  GDraw.color (`RGB (r, g, b))
+
 (* Misc stuff *)
 
 let find_good_unit_scaling t =
@@ -39,3 +85,10 @@ let find_good_unit_scaling t =
   in
   let _, p = find t 0 in
   1000. ** float p, List.nth ["s"; "ms"; "us"; "ns"] p
+
+let get_opt o =
+  match o with
+  | None ->
+     failwith "get_opt"
+  | Some x ->
+     x

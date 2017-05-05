@@ -370,7 +370,7 @@ let draw_legend tl cr =
   for p = p_min to p_max do
     let y = y_pos_of_processor_label tl p in
     Cairo.move_to cr ~x:10. ~y;
-    Cairo.Path.text cr ("Processor " ^ string_of_int p);
+    Cairo.Path.text cr ("P" ^ string_of_int p);
     Cairo.stroke cr
   done;
   ()
@@ -566,7 +566,7 @@ let make
       ()
   in
 
-  let left_margin = 100 in
+  let left_margin = 50 in
   let color_background = Utils.white_rgb in
   let color_selection = 0., 0.2, 1., 1. in
   let color_proc_active = 0.05, 0.05, 0.05, 0.08 in
@@ -664,11 +664,21 @@ let make
       ~callback:(scrollbar_value_changed tl);
   tl
 
+let remove_activity ~kind tl =
+  tl.activities <- List.remove_assoc kind tl.activities;
+  redraw tl
+
 let add_activity ~kind ~color tl =
+  remove_activity ~kind tl;     (* prevent duplicates *)
   tl.activities <- (kind, color) :: tl.activities;
   redraw tl
 
+let remove_event ~kind tl =
+  tl.events <- List.remove_assoc kind tl.events;
+  redraw tl
+
 let add_event ~kind ~color tl =
+  remove_event ~kind tl;        (* prevent duplicates *)
   tl.events <- (kind, color) :: tl.events;
   redraw tl
 
