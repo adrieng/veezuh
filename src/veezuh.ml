@@ -116,12 +116,12 @@ let build_activity_and_event_selector ~packing () =
       ~renderer:(renderer, ["active", cenabled]) ()
   in
   enabled_vc#add_attribute renderer "visible" cvisible;
-  enabled_vc#set_clickable true;
   ignore @@ view#append_column enabled_vc;
 
   (* Set up the view. *)
   view#set_rules_hint true;
   view#set_headers_visible false;
+  view#selection#set_mode `NONE;
   ignore @@ view#misc#connect#realize ~callback:view#expand_all;
 
   setup_toggled_callback
