@@ -90,7 +90,9 @@ type t =
 
     event_mark_thickness : float;
 
-    event_mark_radius : float;
+    event_mark_triangle_height : float;
+
+    event_mark_triangle_base_width : float;
 
     activity_duration_factor : float;
 
@@ -278,13 +280,18 @@ let draw_event_on_processor ~p tl cr t =
   let y = y_pos_of_processor_chart tl p in
   let h = tl.proc_chart_height in
 
-  let draw_bullet y =
-    let x = middle x (x +. tl.event_mark_radius) in
-    Cairo.arc cr ~x ~y ~r:tl.event_mark_radius ~a1:0. ~a2:pi2
+  let draw_triangle y dir =
+    let x = Utils.middle x (x +. tl.event_mark_thickness) in
+    let b = tl.event_mark_triangle_base_width /. 2. in
+    Utils.triangle
+      ~x0:(x -. b) ~y0:y
+      ~x1:x ~y1:(y +. dir *. tl.event_mark_triangle_height)
+      ~x2:(x +. b) ~y2:y
+      cr
   in
 
-  draw_bullet (y +. tl.event_mark_radius);
-  draw_bullet (y +. h -. tl.event_mark_radius);
+  draw_triangle y 1.;
+  draw_triangle (y +. h) (- 1.);
   Cairo.rectangle cr ~x ~y ~w:tl.event_mark_thickness ~h;
   Cairo.fill cr
 
@@ -579,9 +586,10 @@ let make
   let scale_bar_height = 30. in
   let proc_chart_vertical_spacing = 2. in
   let proc_chart_height = 40. in
-  let selection_bar_thickness = 2. in
+  let selection_bar_thickness = 3. in
   let event_mark_thickness = 2. in
-  let event_mark_radius = 2.5 in
+  let event_mark_triangle_height = 15. in
+  let event_mark_triangle_base_width = 10. in
   let activity_duration_factor = 100. in
 
   let da =
@@ -628,7 +636,8 @@ let make
       proc_chart_height;
       selection_bar_thickness;
       event_mark_thickness;
-      event_mark_radius;
+      event_mark_triangle_height;
+      event_mark_triangle_base_width;
       activity_duration_factor;
 
       get_activities;
