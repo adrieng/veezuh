@@ -82,6 +82,8 @@ type t =
 
     scale_bar_height : float;
 
+    legend_right_margin : float;
+
     proc_chart_vertical_spacing : float;
 
     proc_chart_height : float;
@@ -373,11 +375,17 @@ let draw_scale_bar
 
 let draw_legend tl cr =
   let p_min, p_max = visible_processors tl in
+  let label_for_processor p = "P" ^ string_of_int p in
+  let legend_label_width =
+    let ext = Cairo.text_extents cr @@ label_for_processor p_max in
+    ext.Cairo.x_advance
+  in
+  let x = chart_left tl -. legend_label_width -. tl.legend_right_margin in
   set_black cr;
   for p = p_min to p_max do
     let y = y_pos_of_processor_label tl p in
-    Cairo.move_to cr ~x:10. ~y;
-    Cairo.Path.text cr ("P" ^ string_of_int p);
+    Cairo.move_to cr ~x ~y;
+    Cairo.Path.text cr (label_for_processor p);
     Cairo.stroke cr
   done;
   ()
@@ -584,6 +592,7 @@ let make
   let scale_bar_increments_height = 5. in
   let scale_bar_increments_thickness = 1.5 in
   let scale_bar_height = 30. in
+  let legend_right_margin = 5. in
   let proc_chart_vertical_spacing = 2. in
   let proc_chart_height = 40. in
   let selection_bar_thickness = 3. in
@@ -632,6 +641,7 @@ let make
       scale_bar_increments_height;
       scale_bar_increments_thickness;
       scale_bar_height;
+      legend_right_margin;
       proc_chart_vertical_spacing;
       proc_chart_height;
       selection_bar_thickness;
