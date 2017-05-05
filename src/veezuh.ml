@@ -13,11 +13,10 @@ let activity_entries =
   ]
 
 let event_entries =
-  let open Utils in
   [
-    "Thread Copy", ("THREAD_COPY", next_color (), false);
-       "GC Abort", ("GC_ABORT",    next_color (), false);
-   "Halt Request", ("HALT_REQ",    next_color (), false);
+    "Thread Copy", ("THREAD_COPY", (0.196, 0.804, 0.196), false);
+       "GC Abort", ("GC_ABORT",    (0.502, 0.000, 0.502), false);
+   "Halt Request", ("HALT_REQ",    (0.502, 0.000, 0.000), false);
   ]
 
 let gc_color =
