@@ -59,39 +59,6 @@ let epoch { db; _ } =
 let number_of_processors { procs; _ } =
   Array.length procs
 
-let gc_periods_between ~between ~min_duration ~proc { db; procs; } =
-  if !debug then
-    Printf.eprintf
-      "Querying for GC activity in [%f,%f] on proc %d\n"
-      between.Range.l
-      between.Range.u
-      proc;
-  let req =
-    Printf.sprintf
-      "
-       SELECT e.time, l.time
-       FROM events e JOIN events l
-       WHERE e.kind = \"GC_ENTER\" AND l.kind = \"GC_LEAVE\"
-       AND e.argptr = l.argptr AND e.argptr = %d AND e.time < l.time
-       AND %f <= e.time AND l.time <= %f AND l.time - e.time >= %f
-       AND NOT EXISTS
-       (SELECT * FROM events b
-        WHERE b.kind = \"GC_LEAVE\" AND e.time < b.time
-        AND b.time < l.time);"
-      (procs.(proc))
-      between.Range.l
-      between.Range.u
-      min_duration
-  in
-  let l =
-    results
-      db
-      (Pair (Real, Real))
-      req
-  in
-  if !debug then Printf.eprintf "=> Got %d GC periods\n" (List.length l);
-  List.map (fun (l, u) -> Range.{ l; u; }) l
-
 let activities_between ~kind ~between ~min_duration ~proc { db; procs; } =
   if !debug then
     Printf.eprintf
