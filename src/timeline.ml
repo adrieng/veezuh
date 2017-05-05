@@ -190,7 +190,7 @@ let position_of_increment tl i =
 let first_visible_processor tl =
   let top = int_of_float tl.current_visible_chart_top in
   let hpp = int_of_float @@ height_per_processor_bar tl in
-  top / hpp
+  max 0 (top / hpp)
 
 let number_of_visible_processors tl =
   let number_of_processor_bars =
