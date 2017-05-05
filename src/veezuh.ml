@@ -17,6 +17,7 @@ let event_entries =
   [
     "Thread Copy", ("THREAD_COPY", next_color (), false);
        "GC Abort", ("GC_ABORT",    next_color (), false);
+   "Halt Request", ("HALT_REQ",    next_color (), false);
   ]
 
 let gc_color =
