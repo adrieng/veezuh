@@ -29,6 +29,15 @@ let gray_rect ~x ~y ~width ~height cr =
   Cairo.fill cr;
   ()
 
+let triangle ~x0 ~y0 ~x1 ~y1 ~x2 ~y2 cr =
+  Cairo.move_to cr ~x:x0 ~y:y0;
+  Cairo.line_to cr ~x:x1 ~y:y1;
+  Cairo.line_to cr ~x:x2 ~y:y2;
+  Cairo.line_to cr ~x:x0 ~y:y0;
+  Cairo.Path.close cr;
+  Cairo.fill cr;
+  ()
+
 let rgb_byte_of_rgb_float (r, g, b) =
   let f x = min 255 (int_of_float (x *. 255.)) in
   (f r, f g, f b)
