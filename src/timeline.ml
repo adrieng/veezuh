@@ -287,8 +287,12 @@ let draw_epoch ~y ~h tl cr s =
   let x0 = drawing_pos_of_time tl s.l in
   let x1 = drawing_pos_of_time tl s.u in
   let w = max (x1 -. x0) 1. in
-  Cairo.rectangle cr ~x:x0 ~y ~w ~h;
-  Cairo.fill cr
+  if w >= 1. then
+    begin
+      Cairo.rectangle cr ~x:x0 ~y ~w ~h;
+      Cairo.fill cr
+    end;
+  ()
 
 let draw_epoch_on_processor ~p tl cr s =
   let y = y_pos_of_processor_chart tl p in
