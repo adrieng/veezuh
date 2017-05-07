@@ -8,7 +8,7 @@ type t =
 
 type proc_id = int
 
-let debug = ref false
+let debug = false
 
 let tables db =
   results
@@ -60,8 +60,8 @@ let number_of_processors { procs; _ } =
   Array.length procs
 
 let activities_between ~kind ~between ~min_duration ~proc { db; procs; } =
-  if !debug then
-    Printf.eprintf
+  if debug then
+    Format.eprintf
       "Querying for activity %s in [%f,%f] on proc %d\n"
       kind
       between.Range.l
@@ -72,17 +72,24 @@ let activities_between ~kind ~between ~min_duration ~proc { db; procs; } =
       "SELECT e.time, l.time
        FROM events e JOIN events l
        WHERE e.kind = \"%s_ENTER\" AND l.kind = \"%s_LEAVE\"
-       AND e.argptr = l.argptr AND e.argptr = %d AND e.time < l.time
-       AND %f <= e.time AND l.time <= %f AND l.time - e.time >= %f
+       AND e.argptr = l.argptr AND e.argptr = %d
+       AND l.time - e.time >= %f
+       AND ((%f <= e.time AND e.time <= %f)
+            OR (%f <= l.time AND l.time <= %f)
+            OR (e.time <= %f AND l.time >= %f))
        AND NOT EXISTS
        (SELECT * FROM events b
         WHERE b.kind = \"GC_LEAVE\" AND e.time < b.time
         AND b.time < l.time);"
       kind kind
       (procs.(proc))
+      min_duration
       between.Range.l
       between.Range.u
-      min_duration
+      between.Range.l
+      between.Range.u
+      between.Range.l
+      between.Range.u
   in
   let l =
     results
@@ -90,7 +97,8 @@ let activities_between ~kind ~between ~min_duration ~proc { db; procs; } =
       (Pair (Real, Real))
       req
   in
-  if !debug then Printf.eprintf "=> Got %d activities\n" (List.length l);
+  if debug
+  then Format.eprintf "=> Got %d activities with@\n  %s@." (List.length l) req;
   List.map (fun (l, u) -> Range.{ l; u; }) l
 
 let events_between ~between ~proc ~kind { db; procs; } =
