@@ -20,9 +20,19 @@ let event_entries =
    "Initialization", ("INIT",        (0.498, 1.000, 0.831), false);
   ]
 
-let gc_color =
-  let _, (_, (r, g, b), _) = List.hd activity_entries in
+let signal_entries =
+  [
+    "Heap", ("HEAP_OCCUPANCY", (0.486, 0.988, 0.000), true);
+  ]
+
+let color_of_entry (_, (_, (r, g, b), _)) =
   (r, g, b, 1.)
+
+let gc_color =
+  color_of_entry @@ List.hd activity_entries
+
+let heap_color =
+  color_of_entry @@ List.hd signal_entries
 
 let activity_or_event_toggled
       ~timeline
@@ -88,6 +98,11 @@ let build_activity_and_event_selector ~packing () =
     List.iter add_row entries
   in
 
+  let signals = model#append () in
+  model#set ~row:signals ~column:cname "Signals";
+  model#set ~row:signals ~column:cvisible false;
+  add_rows_for_entries ~parent:signals signal_entries;
+
   let activities = model#append () in
   model#set ~row:activities ~column:cname "Activities";
   model#set ~row:activities ~column:cvisible false;
@@ -150,16 +165,28 @@ let build_timeline ~packing trace =
       trace
   in
 
+  let get_signal_max =
+    let m = Trace.max_occupancy trace in
+    fun ~kind -> m
+  in
+
+  let get_signal_samples ~kind ~between ~granularity =
+    Trace.occupancy_between ~between ~granularity trace
+  in
+
   let tl =
     Timeline.make
       ~global_epoch:(Trace.epoch trace)
       ~number_of_processors
       ~get_activities
       ~get_events
+      ~get_signal_max
+      ~get_signal_samples
       ~packing
       ()
   in
   Timeline.add_activity ~kind:"GC" ~color:gc_color tl;
+  Timeline.add_signal ~kind:"Heap" ~color:heap_color tl;
   tl
 
 let build_menu_entries ~menubar ~timeline () =

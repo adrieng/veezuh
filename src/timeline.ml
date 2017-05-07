@@ -7,6 +7,8 @@ type activity_kind = string
 
 type event_kind = string
 
+type signal_kind = string
+
 type processor = int
 
 (* Callbacks *)
@@ -22,6 +24,16 @@ type get_events_callback =
   kind:event_kind ->
   for_proc:processor ->
   between:span ->
+  float list
+
+type get_signal_max_callback =
+  kind:signal_kind ->
+  float
+
+type get_signal_samples_callback =
+  kind:signal_kind ->
+  between:span ->
+  granularity:float ->
   float list
 
 (* The Timeline control *)
@@ -104,9 +116,15 @@ type t =
 
     get_events : get_events_callback;
 
+    get_signal_max : get_signal_max_callback;
+
+    get_signal_samples : get_signal_samples_callback;
+
     mutable activities : (activity_kind * Utils.rgba) list;
 
     mutable events : (event_kind * Utils.rgba) list;
+
+    mutable signals : (signal_kind * Utils.rgba) list;
 
     (* Gtk controls *)
 
@@ -567,6 +585,8 @@ let make
       ~number_of_processors
       ~get_activities
       ~get_events
+      ~get_signal_max
+      ~get_signal_samples
       ~packing
       () =
   let tbl =
@@ -652,8 +672,12 @@ let make
 
       get_activities;
       get_events;
+      get_signal_max;
+      get_signal_samples;
+
       activities = [];
       events = [];
+      signals = [];
 
       tbl;
       da;
@@ -699,6 +723,15 @@ let remove_event ~kind tl =
 let add_event ~kind ~color tl =
   remove_event ~kind tl;        (* prevent duplicates *)
   tl.events <- (kind, color) :: tl.events;
+  redraw tl
+
+let remove_signal ~kind tl =
+  tl.signals <- List.remove_assoc kind tl.signals;
+  redraw tl
+
+let add_signal ~kind ~color tl =
+  remove_signal ~kind tl;     (* prevent duplicates *)
+  tl.signals <- (kind, color) :: tl.signals;
   redraw tl
 
 let zoom_to_global tl =

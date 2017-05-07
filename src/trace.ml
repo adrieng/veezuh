@@ -69,8 +69,7 @@ let activities_between ~kind ~between ~min_duration ~proc { db; procs; } =
       proc;
   let req =
     Printf.sprintf
-      "
-       SELECT e.time, l.time
+      "SELECT e.time, l.time
        FROM events e JOIN events l
        WHERE e.kind = \"%s_ENTER\" AND l.kind = \"%s_LEAVE\"
        AND e.argptr = l.argptr AND e.argptr = %d AND e.time < l.time
@@ -97,8 +96,7 @@ let activities_between ~kind ~between ~min_duration ~proc { db; procs; } =
 let events_between ~between ~proc ~kind { db; procs; } =
   let req =
     Printf.sprintf
-      "
-       SELECT time
+      "SELECT time
        FROM events
        WHERE kind = \"%s\" AND %f <= time AND time <= %f AND argptr = %d;"
       kind
@@ -107,3 +105,22 @@ let events_between ~between ~proc ~kind { db; procs; } =
       procs.(proc)
   in
   results db Real req
+
+let max_occupancy { db; _ } =
+  try
+    let req = "SELECT max(arg2) FROM events WHERE kind = \"HEAP_OCCUPANCY\";" in
+    result db Real req
+  with _ ->
+    0.
+
+let occupancy_between ~between ~granularity { db; _ } =
+  (* granularity ignored for now *)
+  let req =
+    Printf.sprintf
+      "SELECT arg1 FROM events
+       WHERE kind = \"HEAP_OCCUPANCY\" AND %f <= time AND time <= %f;"
+      between.Range.l
+      between.Range.u
+  in
+  results db Real req
+

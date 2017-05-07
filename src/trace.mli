@@ -19,4 +19,14 @@ val events_between :
   proc:int ->
   kind:string ->
   t ->
-  Range.time list
+  float list
+
+val max_occupancy :
+  t ->
+  float
+
+val occupancy_between :
+  between:Range.span ->
+  granularity:float ->
+  t ->
+  float list
