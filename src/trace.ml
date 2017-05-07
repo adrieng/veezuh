@@ -125,8 +125,9 @@ let occupancy_between ~between ~granularity { db; _ } =
   (* granularity ignored for now *)
   let req =
     Printf.sprintf
-      "SELECT time, arg1 FROM events
-       WHERE kind = \"HEAP_OCCUPANCY\" AND %f <= time AND time <= %f;"
+      "SELECT time, arg2 FROM events
+       WHERE kind = \"HEAP_OCCUPANCY\" AND %f <= time AND time <= %f
+       ORDER BY time;"
       between.Range.l
       between.Range.u
   in
