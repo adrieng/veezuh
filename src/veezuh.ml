@@ -1,4 +1,4 @@
-(* Graph widget test program. *)
+(* Main graphical interface *)
 
 open GMain
 
@@ -6,65 +6,119 @@ let width = 800
 
 let height = 600
 
-let activity_entries =
+type key_type =
+  | Signal
+  | Activity
+  | Event
+
+type key =
+  {
+    ty : key_type;
+    name : string;
+    kind : string;
+    color : Utils.rgb;
+    enabled_by_default : bool;
+  }
+
+let keys =
   [
-    "GC",      ("GC",      (1.000, 0.271, 0.000),  true);
-    "Runtime", ("RUNTIME", (0.373, 0.620, 0.627), false);
+    {
+      ty = Signal;
+      name = "Heap";
+      kind = "HEAP_OCCUPANCY";
+      color = (0.486, 1.988, 0.000);
+      enabled_by_default = true;
+    };
+    {
+      ty = Activity;
+      name = "GC";
+      kind = "GC";
+      color = (1.000, 0.271, 0.000);
+      enabled_by_default = true;
+    };
+    {
+      ty = Activity;
+      name = "Runtime";
+      kind = "RUNTIME";
+      color = (0.373, 0.620, 0.627);
+      enabled_by_default = false;
+    };
+    {
+      ty = Event;
+      name = "Thread Copy";
+      kind = "THREAD_COPY";
+      color = (0.196, 0.804, 0.196);
+      enabled_by_default = false;
+    };
+    {
+      ty = Event;
+      name = "GC Abort";
+      kind = "GC_ABORT";
+      color = (0.502, 0.000, 0.502);
+      enabled_by_default = false;
+    };
+    {
+      ty = Event;
+      name = "Halt Request";
+      kind = "HALT_REQ";
+      color = (0.502, 0.000, 0.000);
+      enabled_by_default = false;
+    };
+    {
+      ty = Event;
+      name = "Initialization";
+      kind = "INIT";
+      color = (0.498, 1.000, 0.831);
+      enabled_by_default = false;
+    };
   ]
 
-let event_entries =
-  [
-      "Thread Copy", ("THREAD_COPY", (0.196, 0.804, 0.196), false);
-         "GC Abort", ("GC_ABORT",    (0.502, 0.000, 0.502), false);
-     "Halt Request", ("HALT_REQ",    (0.502, 0.000, 0.000), false);
-   "Initialization", ("INIT",        (0.498, 1.000, 0.831), false);
-  ]
+let find_key name =
+  List.find (fun k -> k.name = name) keys
 
-let signal_entries =
-  [
-    "Heap", ("HEAP_OCCUPANCY", (0.486, 0.988, 0.000), true);
-  ]
+let rgba_color k =
+  let r, g, b = k.color in
+  r, g, b, 1.
 
-let color_of_entry (_, (_, (r, g, b), _)) =
-  (r, g, b, 1.)
-
-let gc_color =
-  color_of_entry @@ List.hd activity_entries
+let find_color_rgba name =
+  rgba_color (find_key name)
 
 let heap_color =
-  color_of_entry @@ List.hd signal_entries
+  find_color_rgba "Heap"
 
-let activity_or_event_toggled
+let gc_color =
+  find_color_rgba "GC"
+
+let actions_for_key_type ty =
+  match ty with
+  | Signal ->
+     Timeline.add_signal ~name:"Heap", Timeline.remove_signal
+  | Activity ->
+     Timeline.add_activity, Timeline.remove_activity
+  | Event ->
+     Timeline.add_event, Timeline.remove_event
+
+let add_key tl name =
+  let k = find_key name in
+  let add, _ = actions_for_key_type k.ty in
+  add ~kind:k.kind ~color:(rgba_color k) tl
+
+let remove_key tl name =
+  let k = find_key name in
+  let _, remove = actions_for_key_type k.ty in
+  remove ~kind:k.kind tl
+
+let key_toggled
       ~timeline
       ~(model : GTree.tree_store)
       ~cname
       ~cenabled
       path =
-  let find_activity_or_event name =
-    try true, List.assoc name activity_entries
-    with Not_found -> false, List.assoc name event_entries
-  in
-
-  let add name =
-    let is_activity, (kind, (r, g, b), _) = find_activity_or_event name in
-    Timeline.(if is_activity then add_activity else add_event)
-      ~kind
-      ~color:(r, g, b, 1.)
-      timeline
-  in
-
-  let remove name =
-    let is_activity, (kind, _, _) = find_activity_or_event name in
-    Timeline.(if is_activity then remove_activity else remove_event)
-      ~kind
-      timeline
-  in
-
   let row = model#get_iter path in
   let enabled = not @@ model#get ~row ~column:cenabled in
   let name = model#get ~row ~column:cname in
   model#set ~row ~column:cenabled enabled;
-  if enabled then add name else remove name;
+  if enabled then add_key timeline name else remove_key timeline name;
   ()
 
 (* Initialize Gtk. DO NOT REMOVE! *)
@@ -87,31 +141,37 @@ let build_activity_and_event_selector ~packing () =
 
   (* Build the Gtk model. *)
 
-  let add_rows_for_entries ~parent entries =
-    let add_row (name, (_, color, enabled)) =
-      let row = model#append ~parent () in
-      model#set ~row ~column:cname name;
-      model#set ~row ~column:cenabled enabled;
-      model#set ~row ~column:cvisible true;
-      model#set ~row ~column:ccolor (Utils.gdk_color_of_rgb_float color);
+  let signals = model#append () in
+  let activities = model#append () in
+  let events = model#append () in
+
+  let add_row_for_key k =
+    let parent =
+      match k.ty with
+      | Signal ->
+         signals
+      | Activity ->
+         activities
+      | Event ->
+         events
     in
-    List.iter add_row entries
+    let row = model#append ~parent () in
+    model#set ~row ~column:cname k.name;
+    model#set ~row ~column:cenabled k.enabled_by_default;
+    model#set ~row ~column:cvisible true;
+    model#set ~row ~column:ccolor (Utils.gdk_color_of_rgb_float k.color);
   in
 
-  let signals = model#append () in
   model#set ~row:signals ~column:cname "Signals";
   model#set ~row:signals ~column:cvisible false;
-  add_rows_for_entries ~parent:signals signal_entries;
 
-  let activities = model#append () in
   model#set ~row:activities ~column:cname "Activities";
   model#set ~row:activities ~column:cvisible false;
-  add_rows_for_entries ~parent:activities activity_entries;
 
-  let events = model#append () in
   model#set ~row:events ~column:cname "Events";
   model#set ~row:events ~column:cvisible false;
-  add_rows_for_entries ~parent:events event_entries;
+
+  List.iter add_row_for_key keys;
 
   (* Build the columns. *)
 
@@ -185,8 +245,8 @@ let build_timeline ~packing trace =
       ~packing
       ()
   in
-  Timeline.add_activity ~kind:"GC" ~color:gc_color tl;
-  Timeline.add_signal ~kind:"Heap" ~color:heap_color tl;
+  add_key tl "GC";
+  add_key tl "Heap";
   tl
 
 let build_menu_entries ~menubar ~timeline () =
@@ -235,7 +295,7 @@ let build_toplevel_window filename =
   let timeline = build_timeline ~packing:(hbox#pack ~expand:true) trace in
 
   (* Connect the Key callback to the timeline. *)
-  ignore @@ setup_callback (activity_or_event_toggled ~timeline);
+  ignore @@ setup_callback (key_toggled ~timeline);
 
   (* Menu entries *)
   let accel_group = build_menu_entries ~menubar ~timeline () in

@@ -29,4 +29,4 @@ val occupancy_between :
   between:Range.span ->
   granularity:float ->
   t ->
-  float list
+  (float * float) list
