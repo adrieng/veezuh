@@ -108,7 +108,7 @@ let events_between ~between ~proc ~kind { db; procs; } =
 
 let max_occupancy { db; _ } =
   try
-    let req = "SELECT max(arg2) FROM events WHERE kind = \"HEAP_OCCUPANCY\";" in
+    let req = "SELECT max(arg1) FROM events WHERE kind = \"HEAP_OCCUPANCY\";" in
     result db Real req
   with _ ->
     0.
@@ -117,10 +117,10 @@ let occupancy_between ~between ~granularity { db; _ } =
   (* granularity ignored for now *)
   let req =
     Printf.sprintf
-      "SELECT arg1 FROM events
+      "SELECT time, arg1 FROM events
        WHERE kind = \"HEAP_OCCUPANCY\" AND %f <= time AND time <= %f;"
       between.Range.l
       between.Range.u
   in
-  results db Real req
+  results db (Pair (Real, Real)) req
 

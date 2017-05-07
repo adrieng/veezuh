@@ -31,7 +31,7 @@ type get_signal_samples_callback =
   kind:signal_kind ->
   between:Range.span ->
   granularity:float ->
-  float list
+  (float * float) list
 
 (* The Timeline control *)
 
@@ -56,7 +56,8 @@ val add_event : kind:event_kind -> color:Utils.rgba -> t -> unit
 
 val remove_event : kind:event_kind -> t -> unit
 
-val add_signal : kind:signal_kind -> color:Utils.rgba -> t -> unit
+val add_signal :
+  name:string -> kind:signal_kind -> color:Utils.rgba -> t -> unit
 
 val remove_signal : kind:signal_kind -> t -> unit
 
