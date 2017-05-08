@@ -50,7 +50,8 @@ let results : type a. db -> a sqlty -> string -> a list =
   let cb s =
     r := parse ty s :: !r
   in
-  match exec_not_null_no_headers db ~cb req with
+  let res = exec_not_null_no_headers db ~cb req in
+  match res with
   | Rc.OK ->
      List.rev !r
   | err ->
