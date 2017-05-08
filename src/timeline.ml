@@ -161,7 +161,7 @@ let chart_right tl =
   width tl
 
 let chart_top tl =
-  tl.scale_bar_height +. tl.proc_chart_vertical_spacing
+  tl.scale_bar_height
 
 let chart_width tl =
   chart_right tl -. chart_left tl
