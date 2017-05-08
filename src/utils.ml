@@ -101,3 +101,23 @@ let get_opt o =
      failwith "get_opt"
   | Some x ->
      x
+
+let print_string fmt s =
+  Format.fprintf fmt "%s" s
+
+let print_array print fmt arr =
+  let l = Array.length arr in
+  Format.fprintf fmt "@[<hv 2>";
+  for i = 0 to l - 2 do
+    Format.fprintf fmt "%a,@ "
+      print arr.(i);
+  done;
+  if l > 0
+  then
+    Format.fprintf fmt "%a"
+      print arr.(l - 1);
+  Format.fprintf fmt "@]";
+  ()
+
+let print_string_array =
+  print_array print_string

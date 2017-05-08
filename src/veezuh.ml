@@ -1,10 +1,4 @@
-(* Main graphical interface *)
-
-open GMain
-
-let width = 800
-
-let height = 600
+(* Keys (things to display) *)
 
 type key_type =
   | Signal
@@ -28,6 +22,34 @@ let keys =
       kind = "HEAP_OCCUPANCY";
       color = (0.486, 1.988, 0.000);
       enabled_by_default = true;
+    };
+    {
+      ty = Signal;
+      name = "Ratio 0";
+      kind = "HEAP_RATIO 0";
+      color = (0.855, 0.647, 0.125);
+      enabled_by_default = false;
+    };
+    {
+      ty = Signal;
+      name = "Ratio 1";
+      kind = "HEAP_RATIO 1";
+      color = (0.855, 0.647, 0.125);
+      enabled_by_default = false;
+    };
+    {
+      ty = Signal;
+      name = "Ratio 2";
+      kind = "HEAP_RATIO 2";
+      color = (0.855, 0.647, 0.125);
+      enabled_by_default = false;
+    };
+    {
+      ty = Signal;
+      name = "Ratio 3";
+      kind = "HEAP_RATIO 3";
+      color = (0.855, 0.647, 0.125);
+      enabled_by_default = false;
     };
     {
       ty = Activity;
@@ -89,10 +111,10 @@ let heap_color =
 let gc_color =
   find_color_rgba "GC"
 
-let actions_for_key_type ty =
-  match ty with
+let actions_for_key k =
+  match k.ty with
   | Signal ->
-     Timeline.add_signal ~name:"Heap", Timeline.remove_signal
+     Timeline.add_signal ~name:k.name, Timeline.remove_signal
   | Activity ->
      Timeline.add_activity, Timeline.remove_activity
   | Event ->
@@ -100,13 +122,69 @@ let actions_for_key_type ty =
 
 let add_key tl name =
   let k = find_key name in
-  let add, _ = actions_for_key_type k.ty in
+  let add, _ = actions_for_key k in
   add ~kind:k.kind ~color:(rgba_color k) tl
 
 let remove_key tl name =
   let k = find_key name in
-  let _, remove = actions_for_key_type k.ty in
+  let _, remove = actions_for_key k in
   remove ~kind:k.kind tl
+
+let get_activities trace ~kind ~for_proc ~between ~min_duration =
+  Trace.activities_between
+    ~kind
+    ~between
+    ~min_duration (* place-holder *)
+    ~proc:for_proc
+    trace
+
+let get_events trace ~kind ~for_proc ~between =
+  Trace.events_between
+    ~between
+    ~kind
+    ~proc:for_proc
+    trace
+
+let ratio_proc =
+  1
+
+let get_signal_max trace ~kind =
+  match kind with
+  | "HEAP_OCCUPANCY" ->
+     Trace.max_occupancy trace
+  | "HEAP_RATIO 0" ->
+     Trace.max_ratio ~proc:0 trace
+  | "HEAP_RATIO 1" ->
+     Trace.max_ratio ~proc:1 trace
+  | "HEAP_RATIO 2" ->
+     Trace.max_ratio ~proc:2 trace
+  | "HEAP_RATIO 3" ->
+     Trace.max_ratio ~proc:3 trace
+  | _ ->
+     failwith @@ "get_signal_max: unknown signal kind " ^ kind
+
+let get_signal_samples trace ~kind ~between ~granularity =
+  match kind with
+  | "HEAP_OCCUPANCY" ->
+     Trace.occupancy_between ~between ~granularity trace
+  | "HEAP_RATIO 0" ->
+     Trace.ratio_between ~between ~proc:0 ~granularity trace
+  | "HEAP_RATIO 1" ->
+     Trace.ratio_between ~between ~proc:1 ~granularity trace
+  | "HEAP_RATIO 2" ->
+     Trace.ratio_between ~between ~proc:2 ~granularity trace
+  | "HEAP_RATIO 3" ->
+     Trace.ratio_between ~between ~proc:3 ~granularity trace
+  | _ ->
+     failwith @@ "get_signal_samples: unknown signal kind " ^ kind
+
+(* Main graphical interface *)
+
+open GMain
+
+let width = 800
+
+let height = 600
 
 let key_toggled
       ~timeline
@@ -208,40 +286,14 @@ let build_keys ~packing () =
 let build_timeline ~packing trace =
   let number_of_processors = Trace.number_of_processors trace in
 
-  let get_activities ~kind ~for_proc ~between ~min_duration =
-    Trace.activities_between
-      ~kind
-      ~between
-      ~min_duration (* place-holder *)
-      ~proc:for_proc
-      trace
-  in
-
-  let get_events ~kind ~for_proc ~between =
-    Trace.events_between
-      ~between
-      ~kind
-      ~proc:for_proc
-      trace
-  in
-
-  let get_signal_max =
-    let m = Trace.max_occupancy trace in
-    fun ~kind -> m
-  in
-
-  let get_signal_samples ~kind ~between ~granularity =
-    Trace.occupancy_between ~between ~granularity trace
-  in
-
   let tl =
     Timeline.make
       ~global_epoch:(Trace.epoch trace)
       ~number_of_processors
-      ~get_activities
-      ~get_events
-      ~get_signal_max
-      ~get_signal_samples
+      ~get_activities:(get_activities trace)
+      ~get_events:(get_events trace)
+      ~get_signal_max:(get_signal_max trace)
+      ~get_signal_samples:(get_signal_samples trace)
       ~packing
       ()
   in

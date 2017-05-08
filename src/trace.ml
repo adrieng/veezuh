@@ -133,3 +133,29 @@ let occupancy_between ~between ~granularity { db; _ } =
   in
   results db (Pair (Real, Real)) req
 
+let max_ratio ~proc { db; procs } =
+  try
+    let req =
+      Printf.sprintf
+        "SELECT max(arg1/arg2)
+         FROM events
+         WHERE kind = \"HEAP_RATIO\" AND argptr = %d;"
+        procs.(proc)
+    in
+    result db Real req
+  with _ ->
+    0.
+
+let ratio_between ~between ~proc ~granularity { db; procs } =
+  (* granularity ignored for now *)
+  let req =
+    Printf.sprintf
+      "SELECT time, (arg1/arg2) FROM events
+       WHERE kind = \"HEAP_RATIO\" AND %f <= time AND time <= %f
+       AND argptr = %d
+       ORDER BY time;"
+      between.Range.l
+      between.Range.u
+      procs.(proc)
+  in
+  results db (Pair (Real, Real)) req
