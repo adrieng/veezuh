@@ -1,40 +1,116 @@
 open Utils
 open Range
 
-(* Activities and Events *)
+(* Keys *)
 
-type activity_kind = string
-
-type event_kind = string
-
-type signal_kind = string
-
-type processor = int
-
-(* Callbacks *)
-
-type get_activities_callback =
-  kind:activity_kind ->
-  for_proc:processor ->
-  between:span ->
-  min_duration:float ->
-  Range.span list
-
-type get_events_callback =
-  kind:event_kind ->
-  for_proc:processor ->
-  between:span ->
-  float list
-
-type get_signal_max_callback =
-  kind:signal_kind ->
+type signal_max_callback =
+  unit ->
   float
 
-type get_signal_samples_callback =
-  kind:signal_kind ->
-  between:span ->
+type signal_samples_callback =
+  between:Range.span ->
   granularity:float ->
   (float * float) list
+
+type activity_callback =
+  between:Range.span ->
+  min_duration:Range.time ->
+  Range.span list
+
+type event_callback =
+  between:Range.span ->
+  Range.time list
+
+type key_kind =
+  | Signal of signal_kind
+  | Activity of activity_kind
+  | Event of event_kind
+
+and signal_kind =
+  {
+    max : signal_max_callback;
+    samples : signal_samples_callback;
+    alpha_mult : float;
+  }
+
+and activity_kind =
+  {
+    activities : activity_callback;
+  }
+
+and event_kind =
+  {
+    events : event_callback;
+  }
+
+type key =
+  {
+    name : string;
+    kind : key_kind;
+    color : Utils.rgba;
+    mutable visible : bool;
+  }
+
+type key_name = string
+
+let make_key ~name ~kind ~color ~visible =
+  { name; kind; color; visible; }
+
+let get_key_name { name; _ } =
+  name
+
+let get_key_kind { kind; _ } =
+  kind
+
+let get_key_color { color; _ } =
+  color
+
+let get_key_visible { visible; _ } =
+  visible
+
+let set_key_visible k ~visible =
+  k.visible <- visible
+
+(* Rows *)
+
+type row_name = string
+
+type row =
+  {
+    name : string;
+    rank : int;
+    height : int;
+    background : Utils.rgba;
+    mutable visible : bool;
+    mutable keys : key list;
+  }
+
+let get_row_name { name; _ } =
+  name
+
+let get_row_height { height; _ } =
+  height
+
+let get_row_background { background; _ } =
+  background
+
+let get_row_visible { visible; _ } =
+  visible
+
+let set_row_visible r ~visible =
+  r.visible <- visible
+
+let make_row ~name ~rank ~height ~background ~visible =
+  { name; rank; height; background; visible; keys = []; }
+
+let row_add_key r k =
+  r.keys <- k :: r.keys
+
+let row_find_key r name =
+  List.find (fun (k : key) -> k.name = name) r.keys
+
+let row_iter_keys f r =
+  List.iter f r.keys
 
 (* The Timeline control *)
 
@@ -44,18 +120,17 @@ type get_signal_samples_callback =
    global time = time since the start of the global span
     local time = time since the start of the current span
 
-   drawing pos = position in the drawing area
-     chart pos = position in the chart inside the drawing area
+   drawing x-pos = x-position in the drawing area
+     chart x-pos = x-position in the chart inside the drawing area
+
+   absolute y-pos = y-position in the total area, including hidden parts
+   relative y-pos = y-position in the visible area
 
    The various epochs (global, local, selection) are stored in raw time.
  *)
 
 type t =
   {
-    (* Global immutable parameters *)
-
-    number_of_processors : int;
-
     (* Time parameters *)
 
     global_epoch : Range.span;
@@ -78,10 +153,6 @@ type t =
 
     color_selection : Utils.rgba;
 
-    color_signal_background : Utils.rgba;
-
-    color_proc_active : Utils.rgba;
-
     scroll_zoom_factor : float;
 
     alpha_selection : float;
@@ -94,15 +165,11 @@ type t =
 
     scale_bar_increments_thickness : float;
 
-    scale_bar_height : float;
+    scale_bar_height : int;
 
     legend_right_margin : float;
 
-    signal_chart_height : float;
-
-    proc_chart_vertical_spacing : float;
-
-    proc_chart_height : float;
+    chart_vertical_spacing : int;
 
     selection_bar_thickness : float;
 
@@ -116,19 +183,7 @@ type t =
 
     (* Activities and events *)
 
-    get_activities : get_activities_callback;
-
-    get_events : get_events_callback;
-
-    get_signal_max : get_signal_max_callback;
-
-    get_signal_samples : get_signal_samples_callback;
-
-    mutable activities : (activity_kind * Utils.rgba) list;
-
-    mutable events : (event_kind * Utils.rgba) list;
-
-    mutable signals : (signal_kind * (string * Utils.rgba * float)) list;
+    mutable rows : row list;
 
     (* Gtk controls *)
 
@@ -143,19 +198,19 @@ type t =
 
 (* Low-level functions *)
 
-let number_of_signals tl =
-  List.length tl.signals
+let number_of_rows tl =
+  List.length tl.rows
 
 (* Functions computing layout positions *)
 
 let width tl =
-  float tl.da#misc#allocation.Gtk.width
+  tl.da#misc#allocation.Gtk.width
 
 let height tl =
-  float tl.da#misc#allocation.Gtk.height
+  tl.da#misc#allocation.Gtk.height
 
 let chart_left tl =
-  float tl.left_margin
+  tl.left_margin
 
 let chart_right tl =
   width tl
@@ -164,13 +219,32 @@ let chart_top tl =
   tl.scale_bar_height
 
 let chart_width tl =
-  chart_right tl -. chart_left tl
+  chart_right tl - chart_left tl
 
 let chart_height tl =
-  height tl -. chart_top tl
+  height tl - chart_top tl
 
 let chart_dim tl =
   chart_width tl, chart_height tl
+
+let chart_left_f tl =
+  float @@ chart_left tl
+
+let chart_right_f tl =
+  float @@ chart_right tl
+
+let chart_top_f tl =
+  float @@ chart_top tl
+
+let chart_width_f tl =
+  float @@ chart_width tl
+
+let chart_height_f tl =
+  float @@ chart_height tl
+
+let chart_dim_f tl =
+  let w, h = chart_dim tl in
+  float w, float h
 
 (* conversion functions between time and graphical space *)
 
@@ -178,19 +252,19 @@ let current_epoch_range tl =
   Range.range tl.current_epoch
 
 let time_per_pixel tl =
-  current_epoch_range tl /. chart_width tl
+  current_epoch_range tl /. chart_width_f tl
 
 let time_per_increment tl =
   current_epoch_range tl /. float tl.scale_bar_number_of_increments
 
 let pixels_per_time tl =
-  chart_width tl /. current_epoch_range tl
+  chart_width_f tl /. current_epoch_range tl
 
 let pixels_per_increment tl =
-  chart_width tl /. float tl.scale_bar_number_of_increments
+  chart_width_f tl /. float tl.scale_bar_number_of_increments
 
 let local_time_of_drawing_pos tl x =
-  time_per_pixel tl *. (x -. chart_left tl)
+  time_per_pixel tl *. (x -. chart_left_f tl)
 
 let global_time_of_drawing_pos tl x =
   local_time_of_drawing_pos tl x +. tl.current_epoch.l -. tl.global_epoch.l
@@ -200,62 +274,55 @@ let raw_time_of_drawing_pos tl x =
 
 let drawing_pos_of_time tl t =
   let t = Range.truncate tl.current_epoch t in
-  chart_left tl +. pixels_per_time tl *. (t -. tl.current_epoch.l)
+  chart_left_f tl +. pixels_per_time tl *. (t -. tl.current_epoch.l)
 
 let chart_pos_of_drawing_pos tl x =
-  let x = Range.truncate { l = chart_left tl; u = chart_right tl; } x in
-  x -. chart_left tl
+  let x =
+    Range.truncate
+      { l = chart_left_f tl; u = chart_right_f tl; }
+      x
+  in
+  x -. chart_left_f tl
 
 (* Derived graphical parameters *)
 
-let height_per_processor_chart tl =
-  tl.proc_chart_height +. tl.proc_chart_vertical_spacing
+let total_chart_height tl =
+  number_of_rows tl * tl.chart_vertical_spacing
+  + List.fold_left (fun acc r -> acc + r.height) 0 tl.rows
 
-let height_per_signal_chart tl =
-  tl.signal_chart_height +. tl.proc_chart_vertical_spacing
-
-let proc_chart_top tl =
-  chart_top tl
-  +. float (List.length tl.signals) *. height_per_signal_chart tl
-
-let chart_preferred_height tl =
-  height_per_signal_chart tl *. float (number_of_signals tl)
-  +. height_per_processor_chart tl *. float tl.number_of_processors
-  +. tl.scale_bar_height
+let total_chart_height_f tl =
+  float @@ total_chart_height tl
 
 let position_of_increment tl i =
-  chart_left tl +. pixels_per_increment tl *. float i
+  float (chart_left tl) +. pixels_per_increment tl *. float i
 
-let first_visible_processor tl =
-  let top = int_of_float tl.current_visible_chart_top in
-  let hpp = int_of_float @@ height_per_processor_chart tl in
-  max 0 (top / hpp)
-
-let number_of_visible_processors tl =
-  let number_of_processor_bars =
-    ceil (chart_height tl /. height_per_processor_chart tl)
+let iter_rows_between f tl ~ymin ~ymax =
+  let rec iter y rows =
+    match rows with
+    | [] ->
+       ()
+    | r :: rows ->
+       if r.visible
+       then
+         begin
+           if y + r.height >= ymin then
+             begin
+               let yreal = if y < ymin then ymin else y in
+               let h = if y + r.height >= ymax then ymax - y else r.height in
+               f ~ymin:y ~y:yreal ~h r
+             end;
+           let y = y + r.height + tl.chart_vertical_spacing in
+           if y < ymax then iter y rows
+         end
+       else
+         iter y rows
   in
-  min tl.number_of_processors (int_of_float number_of_processor_bars)
+  iter (chart_top tl) tl.rows
 
-let visible_processors tl =
-  let first = first_visible_processor tl in
-  let last = first + number_of_visible_processors tl - 1 in
-  first, last
-
-let y_pos_of_processor_chart tl p =
-  let p = p - first_visible_processor tl in
-  assert (p >= 0);
-  proc_chart_top tl +. float p *. height_per_processor_chart tl
-
-let y_pos_of_signal_chart tl i =
-  assert (i >= 0);
-  chart_top tl +. float i *. height_per_signal_chart tl
-
-let y_pos_of_processor_label tl p =
-  y_pos_of_processor_chart tl p +. height_per_processor_chart tl /. 2.
-
-let y_pos_of_signal_label tl p =
-  y_pos_of_signal_chart tl p +. height_per_signal_chart tl /. 2.
+let iter_visible_rows f tl =
+  let ymin = int_of_float tl.current_visible_chart_top in
+  let ymax = ymin + chart_height tl in
+  iter_rows_between f tl ~ymin ~ymax
 
 (* Misc *)
 
@@ -263,7 +330,9 @@ let current_unit_scaling tl =
   find_good_unit_scaling @@ time_per_increment tl
 
 let truncate_pos_to_chart tl x =
-  Range.truncate { l = chart_left tl; u = chart_right tl; } x
+  Range.truncate
+    { l = float (chart_left tl); u = float (chart_right tl); }
+    x
 
 (* Selection-related things *)
 
@@ -291,9 +360,9 @@ let configure_scrollbars tl =
   tl.hsc#adjustment#set_step_increment (time_per_increment tl);
   (* Vertical scrollbar *)
   tl.vsc#adjustment#set_lower 0.;
-  tl.vsc#adjustment#set_upper (chart_preferred_height tl);
+  tl.vsc#adjustment#set_upper (total_chart_height_f tl);
   tl.vsc#adjustment#set_value tl.current_visible_chart_top;
-  tl.vsc#adjustment#set_page_size (chart_height tl);
+  tl.vsc#adjustment#set_page_size (chart_height_f tl);
   ()
 
 let redraw ?(scrollbars = false) tl =
@@ -313,20 +382,8 @@ let draw_epoch ~y ~h tl cr s =
     end;
   ()
 
-let draw_epoch_on_signal ~i tl cr s =
-  let y = y_pos_of_signal_chart tl i in
-  let h = tl.signal_chart_height in
-  draw_epoch ~y ~h tl cr s
-
-let draw_epoch_on_processor ~p tl cr s =
-  let y = y_pos_of_processor_chart tl p in
-  let h = tl.proc_chart_height in
-  draw_epoch ~y ~h tl cr s
-
-let draw_event_on_processor ~p tl cr t =
+let draw_event ~y ~h tl cr t =
   let x = drawing_pos_of_time tl t in
-  let y = y_pos_of_processor_chart tl p in
-  let h = tl.proc_chart_height in
 
   let draw_triangle y dir =
     let x = Utils.middle x (x +. tl.event_mark_thickness) in
@@ -351,17 +408,21 @@ let draw_background tl cr =
   set_rgb cr tl.color_background;
   Cairo.rectangle
     cr
-    ~x:(chart_left tl)
-    ~y:(chart_top tl)
-    ~w:(chart_width tl)
-    ~h:(chart_height tl);
+    ~x:(float @@ chart_left tl)
+    ~y:(float @@ chart_top tl)
+    ~w:(float @@ chart_width tl)
+    ~h:(float @@ chart_height tl);
   Cairo.fill cr;
 
   (* Draw vertical bars. *)
   for i = 0 to tl.scale_bar_number_of_increments - 1 do
     let x = position_of_increment tl i in
     Cairo.set_source_rgba cr 0. 0. 0. 0.4;
-    Cairo.rectangle cr ~x ~y:(chart_top tl) ~w:1. ~h:(chart_height tl);
+    Cairo.rectangle cr
+      ~x
+      ~y:(float @@ chart_top tl)
+      ~w:1.
+      ~h:(float @@ chart_height tl);
     Cairo.fill cr
   done;
 
@@ -371,15 +432,15 @@ let draw_scale_bar
       tl
       cr
   =
-  let w, h = chart_dim tl in
+  let w, h = chart_dim_f tl in
 
   set_black cr;
 
   (* Draw the main axis. *)
   Cairo.rectangle
     cr
-    ~x:(chart_left tl)
-    ~y:(tl.scale_bar_height -. tl.scale_bar_thickness)
+    ~x:(float @@ chart_left tl)
+    ~y:(float tl.scale_bar_height -. tl.scale_bar_thickness)
     ~w
     ~h:tl.scale_bar_thickness;
   Cairo.fill cr;
@@ -387,7 +448,7 @@ let draw_scale_bar
   (* Draw the increments *)
 
   let draw_increment ?(label = "") x =
-    let y = tl.scale_bar_height -. tl.scale_bar_thickness in
+    let y = float tl.scale_bar_height -. tl.scale_bar_thickness in
     (* Draw the increment bar *)
     Cairo.rectangle
       cr
@@ -419,137 +480,127 @@ let draw_scale_bar
 
   ()
 
-let draw_legend tl cr =
-  let p_min, p_max = visible_processors tl in
-  let label_for_processor p = "P" ^ string_of_int p in
+let draw_key ~ymin ~y ~h tl cr (key : key) =
+  if key.visible then
+    begin
+      let between = tl.current_epoch in
+      set_rgba cr key.color;
+      match key.kind with
+      | Signal ksignal ->
+         let granularity = time_per_pixel tl in
+         let vmax = ksignal.max () in
+         let samples = ksignal.samples ~between ~granularity in
 
-  let label_length label =
-    let ext = Cairo.text_extents cr label in
-    ext.Cairo.x_advance
-  in
+         let ymax = y +. h in
+         let yr = { l = y +. 1.; u = ymax -. 1.; } in
 
-  let x = chart_left tl -. tl.legend_right_margin in
+         Cairo.set_line_join cr Cairo.JOIN_ROUND;
+         Cairo.set_line_width cr 2.;
 
-  let draw_label_right_aligned ~y label =
-    let x = x -. label_length label in
+         (* Start the mask at the bottom-right of the proc chart *)
+
+         let lx = ref (chart_left_f tl) in
+         let ly = ref ymax in
+         Cairo.move_to cr ~x:!lx ~y:!ly;
+
+         (* Add each sample to the mask *)
+         let draw_sample (t, v) =
+           let x = drawing_pos_of_time tl t in
+           let y = ymax -. v /. vmax *. h in
+           let y = Range.truncate yr y in
+           if ceil y <> ceil !ly
+           then
+             begin
+               Cairo.line_to cr ~x:x ~y:!ly;
+               Cairo.line_to cr ~x ~y;
+               lx := x;
+               ly := y;
+             end;
+         in
+         List.iter draw_sample samples;
+
+         (* Close the mask *)
+         Cairo.line_to cr ~x:(chart_right_f tl) ~y:!ly;
+         Cairo.stroke_preserve cr;
+
+         (* Draw the underline *)
+         Utils.(set_rgba cr @@ mult_alpha key.color ksignal.alpha_mult);
+         Cairo.line_to cr ~x:(chart_right_f tl) ~y:ymax;
+         Cairo.line_to cr ~x:(chart_left_f tl) ~y:ymax;
+         Cairo.Path.close cr;
+         Cairo.fill cr
+
+      | Activity kactivity ->
+         let min_duration = time_per_pixel tl in
+         let activities = kactivity.activities ~between ~min_duration in
+         List.iter (draw_epoch ~y ~h tl cr) activities
+
+      | Event kevent ->
+         let events = kevent.events ~between in
+         List.iter (draw_event ~y ~h tl cr) events
+    end
+
+let draw_row tl cr ~ymin ~y ~h row =
+  let y = float y in
+  let h = float h in
+
+  (* Draw legend *)
+  Utils.set_rgba cr Utils.black;
+  let draw_label_right_aligned label =
+    let y = y +. h /. 2. in
+    let l = Cairo.((text_extents cr row.name).x_advance) in
+    let x = chart_left_f tl -. tl.legend_right_margin -. l in
     Cairo.move_to cr ~x ~y;
     Cairo.Path.text cr label;
     Cairo.stroke cr
   in
+  draw_label_right_aligned row.name;
 
-  set_black cr;
+  (* Draw background *)
+  Utils.set_rgba cr row.background;
+  draw_epoch ~y ~h tl cr tl.current_epoch;
 
-  (* Draw labels for signals *)
-  let draw_signal_label i (_, (name, _, _)) =
-    let y = y_pos_of_signal_label tl i in
-    draw_label_right_aligned ~y name
-  in
-  List.iteri draw_signal_label tl.signals;
+  (* Draw keys *)
+  List.iter (draw_key ~ymin ~y ~h tl cr) row.keys;
 
-  (* Draw label for processors *)
-  for p = p_min to p_max do
-    let y = y_pos_of_processor_label tl p in
-    draw_label_right_aligned ~y @@ label_for_processor p
-  done;
   ()
 
-let draw_signals_chart tl cr =
-  let draw_signal_chart i (kind, (_, (r, g, b, a), vmax)) =
-    (* Draw background *)
-    set_rgba cr tl.color_signal_background;
-    draw_epoch_on_signal ~i tl cr tl.current_epoch;
+(* let draw_processors_chart tl cr = *)
+(*   let p_min, p_max = visible_processors tl in *)
+(*   for p = p_min to p_max do *)
+(*     (\* Draw the default per-processor activity background. *\) *)
+(*     set_rgba cr tl.color_proc_active; *)
+(*     draw_epoch_on_processor ~p tl cr tl.current_epoch; *)
 
-    (* Draw samples *)
-    let granularity = time_per_pixel tl in
-    let samples =
-      tl.get_signal_samples
-        ~kind
-        ~between:tl.current_epoch
-        ~granularity
-    in
+(*     (\* Draw activites. We do not draw the ones that are really small in order to *)
+(*     try to lower query cost on huge files. *\) *)
 
-    Cairo.set_source_rgba cr ~r ~g ~b ~a;
+(*     let min_duration = time_per_pixel tl /. tl.activity_duration_factor in *)
 
-    let y = y_pos_of_signal_chart tl i in
-    let ymax = y +. tl.signal_chart_height in
-    let yr = { l = y +. 1.; u = ymax -. 1.; } in
+(*     let draw_activities_of_kind (kind, color) = *)
+(*       Utils.set_rgba cr color; *)
+(*       tl.get_activities *)
+(*         ~kind *)
+(*         ~for_proc:p *)
+(*         ~between:tl.current_epoch *)
+(*         ~min_duration *)
+(*       |> List.iter (draw_epoch_on_processor ~p tl cr) *)
+(*     in *)
 
-    Cairo.set_line_join cr Cairo.JOIN_ROUND;
-    Cairo.set_line_width cr 2.;
+(*     List.iter draw_activities_of_kind tl.activities; *)
 
-    (* Start the mask at the bottom-right of the proc chart *)
+(*     let draw_events_of_kind (kind, color) = *)
+(*       Utils.set_rgba cr color; *)
+(*       tl.get_events *)
+(*         ~kind *)
+(*         ~for_proc:p *)
+(*         ~between:tl.current_epoch *)
+(*       |> List.iter (draw_event_on_processor ~p tl cr) *)
+(*     in *)
 
-    let lx = ref (chart_left tl) in
-    let ly = ref ymax in
-    Cairo.move_to cr ~x:!lx ~y:!ly;
-
-    (* Add each sample to the mask *)
-    let draw_sample (t, v) =
-      let x = drawing_pos_of_time tl t in
-      let y = ymax -. v /. vmax *. tl.signal_chart_height in
-      let y = Range.truncate yr y in
-      if ceil y <> ceil !ly
-      then
-        begin
-          Cairo.line_to cr ~x:x ~y:!ly;
-          Cairo.line_to cr ~x ~y;
-          lx := x;
-          ly := y;
-        end;
-    in
-    List.iter draw_sample samples;
-
-    (* Close the mask *)
-    Cairo.line_to cr ~x:(chart_right tl) ~y:!ly;
-    Cairo.stroke_preserve cr;
-
-    Cairo.set_source_rgba cr ~r ~g ~b ~a:0.1;
-    Cairo.line_to cr ~x:(chart_right tl) ~y:ymax;
-    Cairo.line_to cr ~x:(chart_left tl) ~y:ymax;
-    Cairo.Path.close cr;
-    Cairo.fill cr;
-
-    ()
-  in
-  List.iteri draw_signal_chart tl.signals;
-  ()
-
-let draw_processors_chart tl cr =
-  let p_min, p_max = visible_processors tl in
-  for p = p_min to p_max do
-    (* Draw the default per-processor activity background. *)
-    set_rgba cr tl.color_proc_active;
-    draw_epoch_on_processor ~p tl cr tl.current_epoch;
-
-    (* Draw activites. We do not draw the ones that are really small in order to
-    try to lower query cost on huge files. *)
-
-    let min_duration = time_per_pixel tl /. tl.activity_duration_factor in
-
-    let draw_activities_of_kind (kind, color) =
-      Utils.set_rgba cr color;
-      tl.get_activities
-        ~kind
-        ~for_proc:p
-        ~between:tl.current_epoch
-        ~min_duration
-      |> List.iter (draw_epoch_on_processor ~p tl cr)
-    in
-
-    List.iter draw_activities_of_kind tl.activities;
-
-    let draw_events_of_kind (kind, color) =
-      Utils.set_rgba cr color;
-      tl.get_events
-        ~kind
-        ~for_proc:p
-        ~between:tl.current_epoch
-      |> List.iter (draw_event_on_processor ~p tl cr)
-    in
-
-    List.iter draw_events_of_kind tl.events;
-  done;
-  ()
+(*     List.iter draw_events_of_kind tl.events; *)
+(*   done; *)
+(*   () *)
 
 let draw_selection tl cr =
   match tl.current_selection with
@@ -560,8 +611,8 @@ let draw_selection tl cr =
 
      let x_l = drawing_pos_of_time tl s.l in
      let x_u = drawing_pos_of_time tl s.u in
-     let y = chart_top tl in
-     let h = chart_height tl in
+     let y = chart_top_f tl in
+     let h = chart_height_f tl in
 
      let draw_vertical_bar x =
        Cairo.rectangle
@@ -593,9 +644,7 @@ let draw_selection tl cr =
 let draw_timeline tl cr =
   draw_background tl cr;
   draw_scale_bar tl cr;
-  draw_legend tl cr;
-  draw_signals_chart tl cr;
-  draw_processors_chart tl cr;
+  iter_visible_rows (draw_row tl cr) tl;
   draw_selection tl cr;
   ()
 ;;
@@ -607,7 +656,7 @@ let change_current_epoch ~epoch tl =
   redraw ~scrollbars:true tl
 
 let zoom ~x ~factor tl =
-  let xr = x /. chart_width tl in
+  let xr = x /. chart_width_f tl in
   let latt = if xr < 0.1 then 0. else 1. in
   let ratt = if xr > 0.9 then 0. else 1. in
   let lchange = current_epoch_range tl *. factor *. latt *. xr in
@@ -689,11 +738,6 @@ let mouse_wheel tl e =
 
 let make
       ~global_epoch
-      ~number_of_processors
-      ~get_activities
-      ~get_events
-      ~get_signal_max
-      ~get_signal_samples
       ~packing
       () =
   let tbl =
@@ -711,19 +755,15 @@ let make
   let left_margin = 50 in
   let color_background = Utils.white_rgb in
   let color_selection = 0., 0.2, 1., 1. in
-  let color_signal_background = 1., 1., 1., 0.0 in
-  let color_proc_active = 0.05, 0.05, 0.05, 0.08 in
   let alpha_selection = 0.3 in
   let scroll_zoom_factor = 0.1 in
   let scale_bar_number_of_increments = 10 in
   let scale_bar_thickness = 3. in
   let scale_bar_increments_height = 5. in
   let scale_bar_increments_thickness = 1.5 in
-  let scale_bar_height = 30. in
+  let scale_bar_height = 30 in
   let legend_right_margin = 5. in
-  let signal_chart_height = 150. in
-  let proc_chart_vertical_spacing = 2. in
-  let proc_chart_height = 40. in
+  let chart_vertical_spacing = 2 in
   let selection_bar_thickness = 3. in
   let event_mark_thickness = 2. in
   let event_mark_triangle_height = 15. in
@@ -750,8 +790,6 @@ let make
 
   let tl =
     {
-      number_of_processors;
-
       global_epoch;
       current_epoch = global_epoch;
       current_visible_chart_top = 0.;
@@ -761,8 +799,6 @@ let make
 
       left_margin;
       color_background;
-      color_signal_background;
-      color_proc_active;
       color_selection;
       alpha_selection;
       scroll_zoom_factor;
@@ -772,23 +808,14 @@ let make
       scale_bar_increments_thickness;
       scale_bar_height;
       legend_right_margin;
-      signal_chart_height;
-      proc_chart_vertical_spacing;
-      proc_chart_height;
+      chart_vertical_spacing;
       selection_bar_thickness;
       event_mark_thickness;
       event_mark_triangle_height;
       event_mark_triangle_base_width;
       activity_duration_factor;
 
-      get_activities;
-      get_events;
-      get_signal_max;
-      get_signal_samples;
-
-      activities = [];
-      events = [];
-      signals = [];
+      rows = [];
 
       tbl;
       da;
@@ -818,33 +845,19 @@ let make
       ~callback:(scrollbar_value_changed tl);
   tl
 
-let remove_activity ~kind tl =
-  tl.activities <- List.remove_assoc kind tl.activities;
-  redraw tl
+let refresh tl =
+  redraw ~scrollbars:true tl
 
-let add_activity ~kind ~color tl =
-  remove_activity ~kind tl;     (* prevent duplicates *)
-  tl.activities <- (kind, color) :: tl.activities;
-  redraw tl
+let add_row tl r =
+  let new_rows = r :: tl.rows in
+  (* TODO very inefficient! *)
+  tl.rows <- List.sort (fun r1 r2 -> compare r1.rank r2.rank) new_rows
 
-let remove_event ~kind tl =
-  tl.events <- List.remove_assoc kind tl.events;
-  redraw tl
+let find_row tl name =
+  List.find (fun r -> r.name = name) tl.rows
 
-let add_event ~kind ~color tl =
-  remove_event ~kind tl;        (* prevent duplicates *)
-  tl.events <- (kind, color) :: tl.events;
-  redraw tl
-
-let remove_signal ~kind tl =
-  tl.signals <- List.remove_assoc kind tl.signals;
-  redraw tl
-
-let add_signal ~name ~kind ~color tl =
-  remove_signal ~kind tl;     (* prevent duplicates *)
-  let vmax = tl.get_signal_max ~kind in
-  tl.signals <- (kind, (name, color, vmax)) :: tl.signals;
-  redraw tl
+let iter_rows f tl =
+  List.iter f tl.rows
 
 let zoom_to_global tl =
   selection_reset tl;

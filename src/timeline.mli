@@ -1,37 +1,95 @@
-(* Activities and Events *)
+(* Keys *)
 
-type activity_kind = string
+type signal_max_callback =
+  unit ->
+  float
 
-type event_kind = string
+type signal_samples_callback =
+  between:Range.span ->
+  granularity:float ->
+  (float * float) list
 
-type signal_kind = string
-
-type processor = int
-
-(* Callbacks *)
-
-type get_activities_callback =
-  kind:activity_kind ->
-  for_proc:processor ->
+type activity_callback =
   between:Range.span ->
   min_duration:Range.time ->
   Range.span list
 
-type get_events_callback =
-  kind:event_kind ->
-  for_proc:processor ->
+type event_callback =
   between:Range.span ->
   Range.time list
 
-type get_signal_max_callback =
-  kind:signal_kind ->
-  float
+type key_kind =
+  | Signal of signal_kind
+  | Activity of activity_kind
+  | Event of event_kind
 
-type get_signal_samples_callback =
-  kind:signal_kind ->
-  between:Range.span ->
-  granularity:float ->
-  (float * float) list
+and signal_kind =
+  {
+    max : signal_max_callback;
+    samples : signal_samples_callback;
+    alpha_mult : float;
+  }
+
+and activity_kind =
+  {
+    activities : activity_callback;
+  }
+
+and event_kind =
+  {
+    events : event_callback;
+  }
+
+type key_name = string
+
+type key
+
+val make_key :
+  name:key_name ->
+  kind:key_kind ->
+  color:Utils.rgba ->
+  visible:bool ->
+  key
+
+val get_key_name : key -> key_name
+
+val get_key_kind : key -> key_kind
+
+val get_key_color : key -> Utils.rgba
+
+val get_key_visible : key -> bool
+
+val set_key_visible : key -> visible:bool -> unit
+
+(* Rows *)
+
+type row_name = string
+
+type row
+
+val make_row :
+  name:row_name ->
+  rank:int ->
+  height:int ->
+  background:Utils.rgba ->
+  visible:bool ->
+  row
+
+val get_row_name : row -> row_name
+
+val get_row_height : row -> int
+
+val get_row_background : row -> Utils.rgba
+
+val get_row_visible : row -> bool
+
+val set_row_visible : row -> visible:bool -> unit
+
+val row_add_key : row -> key -> unit
+
+val row_find_key : row -> key_name -> key
+
+val row_iter_keys : (key -> unit) -> row -> unit
 
 (* The Timeline control *)
 
@@ -39,27 +97,17 @@ type t
 
 val make :
   global_epoch:Range.span ->
-  number_of_processors:int ->
-  get_activities:get_activities_callback ->
-  get_events:get_events_callback ->
-  get_signal_max:get_signal_max_callback ->
-  get_signal_samples:get_signal_samples_callback ->
   packing:(GObj.widget -> unit) ->
   unit ->
   t
 
-val add_activity : kind:activity_kind -> color:Utils.rgba -> t -> unit
+val refresh : t -> unit
 
-val remove_activity : kind:activity_kind -> t -> unit
+val add_row : t -> row -> unit
 
-val add_event : kind:event_kind -> color:Utils.rgba -> t -> unit
+val find_row : t -> row_name -> row
 
-val remove_event : kind:event_kind -> t -> unit
-
-val add_signal :
-  name:string -> kind:signal_kind -> color:Utils.rgba -> t -> unit
-
-val remove_signal : kind:signal_kind -> t -> unit
+val iter_rows : (row -> unit) -> t -> unit
 
 val zoom_to_global : t -> unit
 

@@ -7,18 +7,18 @@ val epoch : t -> Range.span
 val number_of_processors : t -> int
 
 val activities_between :
+  t ->
   kind:string ->
   between:Range.span ->
   min_duration:float ->
   proc:int ->
-  t ->
   Range.span list
 
 val events_between :
+  t ->
   between:Range.span ->
   proc:int ->
   kind:string ->
-  t ->
   float list
 
 val max_occupancy :
@@ -26,19 +26,19 @@ val max_occupancy :
   float
 
 val occupancy_between :
+  t ->
   between:Range.span ->
   granularity:float ->
-  t ->
   (float * float) list
 
 val max_ratio :
-  proc:int ->
   t ->
+  proc:int ->
   float
 
 val ratio_between :
+  t ->
   between:Range.span ->
   proc:int ->
   granularity:float ->
-  t ->
   (float * float) list

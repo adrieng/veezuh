@@ -14,6 +14,15 @@ type rgba = float * float * float * float
 
 let white_rgb = 1., 1., 1.
 
+let black = 0., 0., 0., 1.
+
+let white = 1., 1., 1., 1.
+
+let transparent = 1., 1., 1., 0.
+
+let grey_background =
+  0.05, 0.05, 0.05, 0.08
+
 let set_rgba cr (r, g, b, a) =
   Cairo.set_source_rgba cr ~r ~g ~b ~a
 
@@ -37,6 +46,9 @@ let triangle ~x0 ~y0 ~x1 ~y1 ~x2 ~y2 cr =
   Cairo.Path.close cr;
   Cairo.fill cr;
   ()
+
+let mult_alpha (r, g, b, a) f =
+  (r, g, b, a *. f)
 
 let rgb_byte_of_rgb_float (r, g, b) =
   let f x = min 255 (int_of_float (x *. 255.)) in
@@ -79,7 +91,7 @@ let next_color =
   if !i >= Array.length colors then i := 0;
   c
 
-let gdk_color_of_rgb_float (r, g, b) =
+let gdk_color_of_rgba (r, g, b, _) =
   let f x = int_of_float (x *. 65535.) in
   let r, g, b = f r, f g, f b in
   GDraw.color (`RGB (r, g, b))

@@ -59,7 +59,7 @@ let epoch { db; _ } =
 let number_of_processors { procs; _ } =
   Array.length procs
 
-let activities_between ~kind ~between ~min_duration ~proc { db; procs; } =
+let activities_between { db; procs; } ~kind ~between ~min_duration ~proc =
   if debug then
     Format.eprintf
       "Querying for activity %s in [%f,%f] on proc %d\n"
@@ -101,7 +101,7 @@ let activities_between ~kind ~between ~min_duration ~proc { db; procs; } =
   then Format.eprintf "=> Got %d activities with@\n  %s@." (List.length l) req;
   List.map (fun (l, u) -> Range.{ l; u; }) l
 
-let events_between ~between ~proc ~kind { db; procs; } =
+let events_between { db; procs; } ~between ~proc ~kind =
   let req =
     Printf.sprintf
       "SELECT time
@@ -121,7 +121,7 @@ let max_occupancy { db; _ } =
   with _ ->
     0.
 
-let occupancy_between ~between ~granularity { db; _ } =
+let occupancy_between { db; _ } ~between ~granularity =
   (* granularity ignored for now *)
   let req =
     Printf.sprintf
@@ -133,7 +133,7 @@ let occupancy_between ~between ~granularity { db; _ } =
   in
   results db (Pair (Real, Real)) req
 
-let max_ratio ~proc { db; procs } =
+let max_ratio { db; procs } ~proc =
   try
     let req =
       Printf.sprintf
@@ -146,7 +146,7 @@ let max_ratio ~proc { db; procs } =
   with _ ->
     0.
 
-let ratio_between ~between ~proc ~granularity { db; procs } =
+let ratio_between { db; procs } ~between ~proc ~granularity =
   (* granularity ignored for now *)
   let req =
     Printf.sprintf
