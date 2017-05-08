@@ -30,3 +30,15 @@ val occupancy_between :
   granularity:float ->
   t ->
   (float * float) list
+
+val max_ratio :
+  proc:int ->
+  t ->
+  float
+
+val ratio_between :
+  between:Range.span ->
+  proc:int ->
+  granularity:float ->
+  t ->
+  (float * float) list
