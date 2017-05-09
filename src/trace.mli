@@ -76,3 +76,9 @@ val locally_collectible_heap_between :
   granularity:float ->
   unit ->
   (float * float) list
+
+val max_control_ratio :
+  t ->
+  proc:int ->
+  unit ->
+  float

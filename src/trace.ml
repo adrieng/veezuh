@@ -217,3 +217,15 @@ let locally_collectible_heap_between
       procs.(proc)
   in
   results db (Pair (Real, Real)) req
+
+let max_control_ratio { db; procs; } ~proc () =
+  (* granularity ignored for now *)
+  let req =
+    Printf.sprintf
+      "SELECT max(arg3) FROM events
+       WHERE kind = \"HEAP_RATIO\" AND argptr = %d
+       ORDER BY time;
+       "
+      procs.(proc)
+  in
+  result db Real req

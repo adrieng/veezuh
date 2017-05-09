@@ -44,14 +44,6 @@ let build_heap_keys trace =
   heap
 
 let build_keys_for_processor trace ~proc =
-  let ratio =
-    {
-      Timeline.max = (fun () -> Trace.max_ratio trace ~proc);
-      Timeline.samples = Trace.ratio_between trace ~proc ();
-      Timeline.alpha_mult = 0.1;
-    }
-  in
-
   let lch =
     {
       Timeline.max = (fun () ->
@@ -66,6 +58,27 @@ let build_keys_for_processor trace ~proc =
     {
       Timeline.max = (fun () -> Trace.max_locally_collectible trace ~proc ());
       Timeline.samples = Trace.locally_collectible_between trace ~proc ();
+      Timeline.alpha_mult = 0.1;
+    }
+  in
+
+  let ratio_max = Trace.max_ratio trace ~proc in
+  let ratio =
+    {
+      Timeline.max = (fun () -> ratio_max);
+      Timeline.samples = Trace.ratio_between trace ~proc ();
+      Timeline.alpha_mult = 0.1;
+    }
+  in
+
+  let cratio =
+    let cratio_max = Trace.max_control_ratio trace ~proc () in
+    let samples ~between ~granularity =
+      [(between.Range.l, cratio_max)]
+    in
+    {
+      Timeline.max = (fun () -> ratio_max);
+      Timeline.samples = samples;
       Timeline.alpha_mult = 0.1;
     }
   in
@@ -114,6 +127,11 @@ let build_keys_for_processor trace ~proc =
         ~name:"LCHS/LCS"
         ~kind:(Signal ratio)
         ~color:(0.855, 0.647, 0.125, 1.)
+        ~visible:false;
+      make_key
+        ~name:"LCHS/LCS control"
+        ~kind:(Signal cratio)
+        ~color:(0.755, 0.247, 0.125, 1.)
         ~visible:false;
       make_key
         ~name:"GC"
