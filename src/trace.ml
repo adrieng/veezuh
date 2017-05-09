@@ -123,7 +123,7 @@ let max_ratio { db; procs } ~proc =
       Printf.sprintf
         "SELECT max(arg1/arg2)
          FROM events
-         WHERE kind = \"HEAP_RATIO\" AND argptr = %d;"
+         WHERE kind = \"HEAP_RATIO\" AND argptr = %d AND arg2 > 0;"
         procs.(proc)
     in
     result db Real req
@@ -136,8 +136,9 @@ let ratio_between { db; procs } ~between ~proc ~granularity =
     Printf.sprintf
       "SELECT time, (arg1/arg2) FROM events
        WHERE kind = \"HEAP_RATIO\" AND %f <= time AND time <= %f
-       AND argptr = %d
-       ORDER BY time;"
+       AND argptr = %d AND arg2 > 0
+       ORDER BY time;
+       "
       between.Range.l
       between.Range.u
       procs.(proc)

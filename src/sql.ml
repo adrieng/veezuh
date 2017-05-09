@@ -1,6 +1,6 @@
 include Sqlite3
 
-let debug = ref true
+let debug = ref false
 
 type 'a sqlty =
   | Int : int sqlty
