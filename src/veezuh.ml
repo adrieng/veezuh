@@ -52,6 +52,14 @@ let build_keys_for_processor trace ~proc =
     }
   in
 
+  let lch =
+    {
+      Timeline.max = (fun () -> Trace.max_locally_collectible_heap trace ~proc);
+      Timeline.samples = Trace.locally_collectible_heap_between trace ~proc;
+      Timeline.alpha_mult = 0.1;
+    }
+  in
+
   let lc =
     {
       Timeline.max = (fun () -> Trace.max_locally_collectible trace ~proc);
@@ -87,6 +95,11 @@ let build_keys_for_processor trace ~proc =
         ~name:"Ratio"
         ~kind:(Signal ratio)
         ~color:(0.855, 0.647, 0.125, 1.)
+        ~visible:false;
+      make_key
+        ~name:"Locally collectible heap"
+        ~kind:(Signal lch)
+        ~color:(0.824, 0.706, 0.549, 1.)
         ~visible:false;
       make_key
         ~name:"Locally collectible"

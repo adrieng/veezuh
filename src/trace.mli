@@ -54,3 +54,15 @@ val locally_collectible_between :
   proc:int ->
   granularity:float ->
   (float * float) list
+
+val max_locally_collectible_heap :
+  t ->
+  proc:int ->
+  float
+
+val locally_collectible_heap_between :
+  t ->
+  between:Range.span ->
+  proc:int ->
+  granularity:float ->
+  (float * float) list
