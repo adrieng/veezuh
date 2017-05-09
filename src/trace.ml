@@ -144,3 +144,31 @@ let ratio_between { db; procs } ~between ~proc ~granularity =
       procs.(proc)
   in
   results db (Pair (Real, Real)) req
+
+let max_locally_collectible { db; procs; } ~proc =
+  try
+    let req =
+      Printf.sprintf
+        "SELECT max(arg2)
+         FROM events
+         WHERE kind = \"HEAP_RATIO\" AND argptr = %d;"
+        procs.(proc)
+    in
+    result db Real req
+  with _ ->
+    0.
+
+let locally_collectible_between { db; procs } ~between ~proc ~granularity =
+  (* granularity ignored for now *)
+  let req =
+    Printf.sprintf
+      "SELECT time, arg2 FROM events
+       WHERE kind = \"HEAP_RATIO\" AND %f <= time AND time <= %f
+       AND argptr = %d
+       ORDER BY time;
+       "
+      between.Range.l
+      between.Range.u
+      procs.(proc)
+  in
+  results db (Pair (Real, Real)) req

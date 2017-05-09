@@ -52,6 +52,14 @@ let build_keys_for_processor trace ~proc =
     }
   in
 
+  let lc =
+    {
+      Timeline.max = (fun () -> Trace.max_locally_collectible trace ~proc);
+      Timeline.samples = Trace.locally_collectible_between trace ~proc;
+      Timeline.alpha_mult = 0.1;
+    }
+  in
+
   let get_events kind =
     {
       Timeline.events = Trace.events_between trace ~proc ~kind;
@@ -79,6 +87,11 @@ let build_keys_for_processor trace ~proc =
         ~name:"Ratio"
         ~kind:(Signal ratio)
         ~color:(0.855, 0.647, 0.125, 1.)
+        ~visible:false;
+      make_key
+        ~name:"Locally collectible"
+        ~kind:(Signal lc)
+        ~color:(0.737, 0.561, 0.561, 1.)
         ~visible:false;
       make_key
         ~name:"GC"
