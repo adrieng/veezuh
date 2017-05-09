@@ -112,6 +112,9 @@ let row_find_key r name =
 let row_iter_keys f r =
   List.iter f r.keys
 
+let row_fold_keys f acc r =
+  List.fold_left f acc r.keys
+
 (* The Timeline control *)
 
 (* Some terminological conventions:
@@ -858,6 +861,9 @@ let find_row tl name =
 
 let iter_rows f tl =
   List.iter f tl.rows
+
+let fold_rows f acc tl =
+  List.fold_left f acc tl.rows
 
 let zoom_to_global tl =
   selection_reset tl;

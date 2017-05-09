@@ -133,3 +133,12 @@ let print_array print fmt arr =
 
 let print_string_array =
   print_array print_string
+
+module SSet =
+  Set.Make
+    (
+      struct
+        type t = string
+        let compare = Pervasives.compare
+      end
+    )

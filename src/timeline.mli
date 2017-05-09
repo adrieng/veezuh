@@ -91,6 +91,8 @@ val row_find_key : row -> key_name -> key
 
 val row_iter_keys : (key -> unit) -> row -> unit
 
+val row_fold_keys : ('a -> key -> 'a) -> 'a -> row -> 'a
+
 (* The Timeline control *)
 
 type t
@@ -108,6 +110,8 @@ val add_row : t -> row -> unit
 val find_row : t -> row_name -> row
 
 val iter_rows : (row -> unit) -> t -> unit
+
+val fold_rows : ('a -> row -> 'a) -> 'a -> t -> 'a
 
 val zoom_to_global : t -> unit
 

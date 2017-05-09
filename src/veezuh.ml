@@ -150,7 +150,6 @@ let key_toggled
   let enabled = not @@ info.store#get ~row ~column:info.cenabled in
   info.store#set ~row ~column:info.cenabled enabled;
   let name = info.store#get ~row ~column:info.cname in
-
   begin match info.store#iter_parent row with
   | None ->
      (* User clicked on a row *)
@@ -160,10 +159,22 @@ let key_toggled
   | Some prow ->
      (* User clicked on a key *)
      let pname = info.store#get ~row:prow ~column:info.cname in
-     let row = Timeline.find_row timeline pname in
-     let key = Timeline.row_find_key row name in
-     Timeline.set_key_visible key ~visible:enabled;
-     Timeline.refresh timeline
+     match pname with
+     | "Per-processor" ->
+        (* Toggle for all events *)
+        let toggle row =
+          match Timeline.row_find_key row name with
+          | key ->
+             Timeline.set_key_visible key enabled
+          | exception Not_found ->
+             ()
+        in
+        Timeline.iter_rows toggle timeline
+     | _ ->
+        let row = Timeline.find_row timeline pname in
+        let key = Timeline.row_find_key row name in
+        Timeline.set_key_visible key ~visible:enabled;
+        Timeline.refresh timeline
   end;
   Timeline.refresh timeline
 
@@ -172,61 +183,55 @@ let build_window ~filename () =
   ignore @@ window#connect#destroy ~callback:Main.quit;
   window
 
-let build_model_from_timeline_rows tl m =
-  let build_model_row_from_tl_row r =
-    let open Timeline in
-    let row = m.store#append () in
-    m.store#set ~row ~column:m.cname (get_row_name r);
-    m.store#set ~row ~column:m.cvisible true;
+let add_model_row_from_key info parent k =
+  let open Timeline in
+  let color = Utils.gdk_color_of_rgba (get_key_color k) in
+  let krow = info.store#append ~parent () in
+  info.store#set ~row:krow ~column:info.cname (get_key_name k);
+  info.store#set ~row:krow ~column:info.cenabled (get_key_visible k);
+  info.store#set ~row:krow ~column:info.cvisible true;
+  info.store#set ~row:krow ~column:info.ccolor color
 
-    let build_model_row_from_key k =
-      let open Timeline in
-      let color = Utils.gdk_color_of_rgba (get_key_color k) in
-      let krow = m.store#append ~parent:row () in
-      m.store#set ~row:krow ~column:m.cname (get_key_name k);
-      m.store#set ~row:krow ~column:m.cenabled (get_key_visible k);
-      m.store#set ~row:krow ~column:m.cvisible true;
-      m.store#set ~row:krow ~column:m.ccolor color
-    in
-    Timeline.row_iter_keys build_model_row_from_key r
+let add_model_row_from_tl_row info r =
+  let open Timeline in
+  let row = info.store#append () in
+  info.store#set ~row ~column:info.cname (get_row_name r);
+  info.store#set ~row ~column:info.cvisible true;
+  info.store#set ~row ~column:info.cenabled (get_row_visible r);
+  row
+
+let add_model_row_from_tl_row_with_keys info r =
+  let row = add_model_row_from_tl_row info r in
+  Timeline.row_iter_keys (add_model_row_from_key info row) r
+
+let add_model_row_from_key_not_seen info parent seen k =
+  let name = Timeline.get_key_name k in
+  if Utils.SSet.mem name seen
+  then seen
+  else
+    begin
+      add_model_row_from_key info parent k;
+      Utils.SSet.add name seen
+    end
+
+let add_global_model_row_from_tl_rows info rows =
+  let row = info.store#append () in
+  info.store#set ~row ~column:info.cname "Per-processor";
+  info.store#set ~row ~column:info.cvisible false;
+  let add seen r =
+    Timeline.row_fold_keys (add_model_row_from_key_not_seen info row) seen r
   in
+  ignore @@ List.fold_left add Utils.SSet.empty rows
 
-  Timeline.iter_rows build_model_row_from_tl_row tl;
-  ()
-
-let build_info_from_timeline_rows rows ~packing () =
+let build_info_from_timeline_rows ~packing () =
   let open Gobject.Data in
   let columns = new GTree.column_list in
   let cname = columns#add string in
   let cenabled = columns#add boolean in
   let cvisible = columns#add boolean in
   let ccolor = columns#add (unsafe_boxed (Gobject.Type.from_name "GdkColor")) in
-
   let store = GTree.tree_store columns in
   let view = GTree.view ~model:store ~packing () in
-
-  (* Build the Gtk model from the timeline rows. *)
-
-  let add_gtk_row_of_tl_row pr =
-    let open Timeline in
-    let row = store#append () in
-    store#set ~row ~column:cname (get_row_name pr);
-    store#set ~row ~column:cvisible true;
-    store#set ~row ~column:cenabled (get_row_visible pr);
-
-    let add_row_for_key k =
-      let open Timeline in
-      let color = Utils.gdk_color_of_rgba (get_key_color k) in
-      let krow = store#append ~parent:row () in
-      store#set ~row:krow ~column:cname (get_key_name k);
-      store#set ~row:krow ~column:cenabled (get_key_visible k);
-      store#set ~row:krow ~column:cvisible true;
-      store#set ~row:krow ~column:ccolor color
-    in
-    Timeline.row_iter_keys add_row_for_key pr
-  in
-
-  List.iter add_gtk_row_of_tl_row rows;
 
   (* Build the view. *)
 
@@ -263,14 +268,22 @@ let build_info_from_timeline_rows rows ~packing () =
   }
 
 let build_key_pane trace ~packing () =
+  (* Build graphical components *)
   let frame = GBin.frame ~label:"Keys" ~packing ~border_width:5 () in
-  let rows = ref [] in
+  let info = build_info_from_timeline_rows ~packing:frame#add () in
+
+  (* Populate the model for the TreeView *)
+  let heap_tl_row = build_heap_keys trace in
+  let tl_rows = ref [] in
   for proc = Trace.number_of_processors trace - 1 downto 0 do
-    rows := build_keys_for_processor trace ~proc :: !rows
+    tl_rows := build_keys_for_processor trace ~proc :: !tl_rows
   done;
-  rows := build_heap_keys trace :: !rows;
-  let info = build_info_from_timeline_rows !rows ~packing:frame#add () in
-  !rows, info
+
+  ignore @@ add_model_row_from_tl_row_with_keys info heap_tl_row;
+  add_global_model_row_from_tl_rows info !tl_rows;
+  List.iter (fun k -> ignore @@ add_model_row_from_tl_row info k) !tl_rows;
+
+  heap_tl_row :: !tl_rows, info
 
 let build_timeline rows ~packing trace =
   let timeline =
