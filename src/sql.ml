@@ -1,5 +1,7 @@
 include Sqlite3
 
+let debug = ref true
+
 type 'a sqlty =
   | Int : int sqlty
   | Real : float sqlty
@@ -47,17 +49,23 @@ let parse ty (arr : string array) =
 let results : type a. db -> a sqlty -> string -> a list =
   fun db ty req ->
   let r = ref [] in
-  let cb s =
-    r := parse ty s :: !r
-  in
+  let cb s = r := s :: !r in
+  if !debug then Format.eprintf "Executing request:@\n %s@." req;
   let res = exec_not_null_no_headers db ~cb req in
+  if !debug then Format.eprintf "Done.@.";
   match res with
   | Rc.OK ->
-     List.rev !r
+     List.rev_map (parse ty) !r
   | err ->
-     failwith ("results: " ^ Rc.to_string err ^ " executing " ^ req)
-  | exception Error str ->
-     failwith ("results: " ^ str ^ " executing " ^ req)
+     Format.eprintf "SQLite error %s executing %s@."
+       (Rc.to_string err)
+       req;
+     []
+  | exception exn ->
+     Format.eprintf "Exception %s executing %s@."
+       (Printexc.to_string exn)
+       req;
+     []
 
 let result db ty req =
   List.hd @@ results db ty req

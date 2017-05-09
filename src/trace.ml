@@ -8,8 +8,6 @@ type t =
 
 type proc_id = int
 
-let debug = false
-
 let tables db =
   results
     db
@@ -60,13 +58,6 @@ let number_of_processors { procs; _ } =
   Array.length procs
 
 let activities_between { db; procs; } ~kind ~between ~min_duration ~proc =
-  if debug then
-    Format.eprintf
-      "Querying for activity %s in [%f,%f] on proc %d\n"
-      kind
-      between.Range.l
-      between.Range.u
-      proc;
   let req =
     Printf.sprintf
       "SELECT e.time, l.time
@@ -91,15 +82,8 @@ let activities_between { db; procs; } ~kind ~between ~min_duration ~proc =
       between.Range.l
       between.Range.u
   in
-  let l =
-    results
-      db
-      (Pair (Real, Real))
-      req
-  in
-  if debug
-  then Format.eprintf "=> Got %d activities with@\n  %s@." (List.length l) req;
-  List.map (fun (l, u) -> Range.{ l; u; }) l
+  let res = results db (Pair (Real, Real)) req in
+  List.map (fun (l, u) -> Range.{ l; u; }) res
 
 let events_between { db; procs; } ~between ~proc ~kind =
   let req =
