@@ -448,6 +448,34 @@ let benchmark filen =
         ()
       in
       Printf.printf "File %s: %d runtime periods.\n" filen (List.length act));
+
+  time_call
+    (fun () ->
+      let act =
+        Trace.activities_between
+          trace
+          ~kind:"Runtime"
+          ~proc:0
+          ~between:epoch
+          ~min_duration:0.000001
+        ()
+      in
+      Printf.printf "File %s: %d runtime periods.\n" filen (List.length act));
+
+  time_call
+    (fun () ->
+      let act =
+        Trace.activities_between
+          trace
+          ~enter_suffix:"LOCK_TAKE_LEAVE"
+          ~leave_suffix:"LOCK_RELEASE"
+          ~kind:""
+          ~proc:0
+          ~between:epoch
+          ~min_duration:0.000001
+        ()
+      in
+      Printf.printf "File %s: %d locked periods.\n" filen (List.length act));
   ()
 
 let () =
