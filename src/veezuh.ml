@@ -351,9 +351,72 @@ let build_toplevel_window filename =
   window#show ();
   ()
 
+let benchmark filen =
+  let trace = Trace.from_sqlite_file filen in
+  let epoch = Trace.epoch trace in
+
+  let time_call f =
+    let start = Unix.gettimeofday () in
+    f ();
+    let stop = Unix.gettimeofday () in
+    Printf.printf "Elapsed: %f second(s)\n" (stop -. start)
+  in
+
+  time_call
+    (fun () ->
+      let ratios =
+        Trace.ratio_between
+          trace
+          ~proc:0
+          ~between:epoch
+          ~granularity:0.000001
+      in
+      Printf.printf "File %s: %d ratios.\n" filen (List.length ratios));
+
+  time_call
+    (fun () ->
+      let act =
+        Trace.activities_between
+          trace
+          ~kind:"GC"
+          ~proc:0
+          ~between:epoch
+          ~min_duration:0.000001
+      in
+      Printf.printf "File %s: %d GC periods.\n" filen (List.length act));
+
+  time_call
+    (fun () ->
+      let act =
+        Trace.activities_between
+          trace
+          ~kind:"Runtime"
+          ~proc:0
+          ~between:epoch
+          ~min_duration:0.000001
+      in
+      Printf.printf "File %s: %d runtime periods.\n" filen (List.length act));
+  ()
+
 let () =
+  let files = ref [] in
+
+  let args =
+    [
+      "-benchmark", Arg.String benchmark, "Benchmark trace file";
+    ]
+  in
+
+  let usage =
+    "Trace visualization program"
+  in
+
+  Arg.parse args (fun s -> files := s :: !files) usage;
+
   (* Create one window per file and enter Gtk+ main loop. *)
-  for i = 1 to Array.length Sys.argv - 1 do
-    build_toplevel_window Sys.argv.(i)
-  done;
-  GMain.main ()
+  if !files <> [] then
+    begin
+      List.iter build_toplevel_window !files;
+      GMain.main ()
+    end;
+  ()
