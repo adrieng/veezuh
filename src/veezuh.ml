@@ -148,7 +148,7 @@ let build_keys_for_processor trace ~proc =
       make_key
         ~name:"Lock Taking"
         ~kind:(Activity (get_activites "LOCK_TAKE"))
-        ~color:(1.000, 0.000, 0.000, 1.)
+        ~color:(1.000, 0.000, 0.000, 0.6)
         ~visible:false;
       make_key
         ~name:"Lock Taken"
@@ -157,7 +157,7 @@ let build_keys_for_processor trace ~proc =
                     ~enter_suffix:"LOCK_TAKE_LEAVE"
                     ~leave_suffix:"LOCK_RELEASE"
                     ~kind:""))
-        ~color:(0.863, 0.078, 0.235, 1.)
+        ~color:(0.863, 0.078, 0.235, 0.6)
         ~visible:false;
     ]
   in
