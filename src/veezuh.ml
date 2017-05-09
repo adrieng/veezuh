@@ -111,7 +111,7 @@ let build_keys_for_processor trace ~proc =
         ~color:(0.737, 0.561, 0.561, 1.)
         ~visible:false;
       make_key
-        ~name:"LCH/LC"
+        ~name:"LCHS/LCS"
         ~kind:(Signal ratio)
         ~color:(0.855, 0.647, 0.125, 1.)
         ~visible:false;
