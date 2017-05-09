@@ -9,9 +9,12 @@ val number_of_processors : t -> int
 val activities_between :
   t ->
   kind:string ->
+  ?enter_suffix:string ->
+  ?leave_suffix:string ->
   between:Range.span ->
   min_duration:float ->
   proc:int ->
+  unit ->
   Range.span list
 
 val events_between :
@@ -19,6 +22,7 @@ val events_between :
   between:Range.span ->
   proc:int ->
   kind:string ->
+  unit ->
   float list
 
 val max_occupancy :
@@ -29,6 +33,7 @@ val occupancy_between :
   t ->
   between:Range.span ->
   granularity:float ->
+  unit ->
   (float * float) list
 
 val max_ratio :
@@ -41,11 +46,13 @@ val ratio_between :
   between:Range.span ->
   proc:int ->
   granularity:float ->
+  unit ->
   (float * float) list
 
 val max_locally_collectible :
   t ->
   proc:int ->
+  unit ->
   float
 
 val locally_collectible_between :
@@ -53,11 +60,13 @@ val locally_collectible_between :
   between:Range.span ->
   proc:int ->
   granularity:float ->
+  unit ->
   (float * float) list
 
 val max_locally_collectible_heap :
   t ->
   proc:int ->
+  unit ->
   float
 
 val locally_collectible_heap_between :
@@ -65,4 +74,5 @@ val locally_collectible_heap_between :
   between:Range.span ->
   proc:int ->
   granularity:float ->
+  unit ->
   (float * float) list

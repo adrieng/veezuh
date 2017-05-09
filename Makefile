@@ -1,4 +1,4 @@
-.PHONY: all clean uninstall install run run_all
+.PHONY: all clean uninstall install run runbig runall
 
 all:
 	jbuilder build
@@ -15,5 +15,8 @@ uninstall: all
 run: all
 	./_build/default/src/veezuh.exe ./datasets/fib.32.4proc.std.sqlite
 
-run_all: all
+runbig: all
+	./_build/default/src/veezuh.exe ./datasets/fib.32.4proc.hugemem.sqlite
+
+runall: all
 	./_build/default/src/veezuh.exe ./datasets/*.sqlite

@@ -57,12 +57,22 @@ let epoch { db; _ } =
 let number_of_processors { procs; _ } =
   Array.length procs
 
-let activities_between { db; procs; } ~kind ~between ~min_duration ~proc =
+let activities_between
+      { db; procs; }
+      ~kind
+      ?(enter_suffix = "_ENTER")
+      ?(leave_suffix = "_LEAVE")
+      ~between
+      ~min_duration
+      ~proc
+      () =
+  let enter = kind ^ enter_suffix in
+  let leave = kind ^ leave_suffix in
   let req =
     Printf.sprintf
       "SELECT e.time, l.time
        FROM events e JOIN events l
-       WHERE e.kind = \"%s_ENTER\" AND l.kind = \"%s_LEAVE\"
+       WHERE e.kind = \"%s\" AND l.kind = \"%s\"
        AND e.argptr = l.argptr AND e.argptr = %d
        AND l.time - e.time >= %f
        AND ((%f <= e.time AND e.time <= %f)
@@ -70,9 +80,10 @@ let activities_between { db; procs; } ~kind ~between ~min_duration ~proc =
             OR (e.time <= %f AND l.time >= %f))
        AND NOT EXISTS
        (SELECT * FROM events b
-        WHERE b.kind = \"GC_LEAVE\" AND e.time < b.time
-        AND b.time < l.time);"
-      kind kind
+        WHERE b.kind = \"%s\" AND e.time < b.time
+        AND b.time < l.time AND b.argptr = e.argptr);"
+      enter
+      leave
       (procs.(proc))
       min_duration
       between.Range.l
@@ -81,11 +92,12 @@ let activities_between { db; procs; } ~kind ~between ~min_duration ~proc =
       between.Range.u
       between.Range.l
       between.Range.u
+      leave
   in
   let res = results db (Pair (Real, Real)) req in
   List.map (fun (l, u) -> Range.{ l; u; }) res
 
-let events_between { db; procs; } ~between ~proc ~kind =
+let events_between { db; procs; } ~between ~proc ~kind () =
   let req =
     Printf.sprintf
       "SELECT time
@@ -105,7 +117,7 @@ let max_occupancy { db; _ } =
   with _ ->
     0.
 
-let occupancy_between { db; _ } ~between ~granularity =
+let occupancy_between { db; _ } ~between ~granularity () =
   (* granularity ignored for now *)
   let req =
     Printf.sprintf
@@ -130,7 +142,7 @@ let max_ratio { db; procs } ~proc =
   with _ ->
     0.
 
-let ratio_between { db; procs } ~between ~proc ~granularity =
+let ratio_between { db; procs } ~between ~proc ~granularity () =
   (* granularity ignored for now *)
   let req =
     Printf.sprintf
@@ -145,7 +157,7 @@ let ratio_between { db; procs } ~between ~proc ~granularity =
   in
   results db (Pair (Real, Real)) req
 
-let max_locally_collectible { db; procs; } ~proc =
+let max_locally_collectible { db; procs; } ~proc () =
   try
     let req =
       Printf.sprintf
@@ -158,7 +170,7 @@ let max_locally_collectible { db; procs; } ~proc =
   with _ ->
     0.
 
-let locally_collectible_between { db; procs } ~between ~proc ~granularity =
+let locally_collectible_between { db; procs } ~between ~proc ~granularity () =
   (* granularity ignored for now *)
   let req =
     Printf.sprintf
@@ -173,7 +185,7 @@ let locally_collectible_between { db; procs } ~between ~proc ~granularity =
   in
   results db (Pair (Real, Real)) req
 
-let max_locally_collectible_heap { db; procs; } ~proc =
+let max_locally_collectible_heap { db; procs; } ~proc () =
   try
     let req =
       Printf.sprintf
@@ -186,7 +198,12 @@ let max_locally_collectible_heap { db; procs; } ~proc =
   with _ ->
     0.
 
-let locally_collectible_heap_between { db; procs } ~between ~proc ~granularity =
+let locally_collectible_heap_between
+      { db; procs }
+      ~between
+      ~proc
+      ~granularity
+      () =
   (* granularity ignored for now *)
   let req =
     Printf.sprintf

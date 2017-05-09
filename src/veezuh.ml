@@ -28,7 +28,7 @@ let build_heap_keys trace =
       Timeline.Signal
         {
           Timeline.max = (fun () -> Trace.max_occupancy trace);
-          Timeline.samples = Trace.occupancy_between trace;
+          Timeline.samples = Trace.occupancy_between trace ();
           Timeline.alpha_mult = 0.1;
         }
     in
@@ -47,35 +47,44 @@ let build_keys_for_processor trace ~proc =
   let ratio =
     {
       Timeline.max = (fun () -> Trace.max_ratio trace ~proc);
-      Timeline.samples = Trace.ratio_between trace ~proc;
+      Timeline.samples = Trace.ratio_between trace ~proc ();
       Timeline.alpha_mult = 0.1;
     }
   in
 
   let lch =
     {
-      Timeline.max = (fun () -> Trace.max_locally_collectible_heap trace ~proc);
-      Timeline.samples = Trace.locally_collectible_heap_between trace ~proc;
+      Timeline.max = (fun () ->
+        Trace.max_locally_collectible_heap trace ~proc ()
+      );
+      Timeline.samples = Trace.locally_collectible_heap_between trace ~proc ();
       Timeline.alpha_mult = 0.1;
     }
   in
 
   let lc =
     {
-      Timeline.max = (fun () -> Trace.max_locally_collectible trace ~proc);
-      Timeline.samples = Trace.locally_collectible_between trace ~proc;
+      Timeline.max = (fun () -> Trace.max_locally_collectible trace ~proc ());
+      Timeline.samples = Trace.locally_collectible_between trace ~proc ();
       Timeline.alpha_mult = 0.1;
     }
   in
 
   let get_events kind =
     {
-      Timeline.events = Trace.events_between trace ~proc ~kind;
+      Timeline.events = Trace.events_between trace ~proc ~kind ();
     }
   in
-  let get_activites kind =
+  let get_activites ?enter_suffix ?leave_suffix ~kind =
     {
-      Timeline.activities = Trace.activities_between trace ~proc ~kind;
+      Timeline.activities =
+        Trace.activities_between
+          ?enter_suffix
+          ?leave_suffix
+          trace
+          ~proc
+          ~kind
+          ();
     }
   in
 
@@ -92,19 +101,19 @@ let build_keys_for_processor trace ~proc =
     let open Timeline in
     [
       make_key
-        ~name:"Ratio"
-        ~kind:(Signal ratio)
-        ~color:(0.855, 0.647, 0.125, 1.)
-        ~visible:false;
-      make_key
-        ~name:"Locally collectible heap"
+        ~name:"LCH"
         ~kind:(Signal lch)
         ~color:(0.824, 0.706, 0.549, 1.)
         ~visible:false;
       make_key
-        ~name:"Locally collectible"
+        ~name:"LC"
         ~kind:(Signal lc)
         ~color:(0.737, 0.561, 0.561, 1.)
+        ~visible:false;
+      make_key
+        ~name:"LCH/LC"
+        ~kind:(Signal ratio)
+        ~color:(0.855, 0.647, 0.125, 1.)
         ~visible:false;
       make_key
         ~name:"GC"
@@ -135,6 +144,20 @@ let build_keys_for_processor trace ~proc =
         ~name:"Initialization"
         ~kind:(Event (get_events "INIT"))
         ~color:(0.498, 1.000, 0.831, 1.)
+        ~visible:false;
+      make_key
+        ~name:"Lock Taking"
+        ~kind:(Activity (get_activites "LOCK_TAKE"))
+        ~color:(1.000, 0.000, 0.000, 1.)
+        ~visible:false;
+      make_key
+        ~name:"Lock Taken"
+        ~kind:(Activity
+                 (get_activites
+                    ~enter_suffix:"LOCK_TAKE_LEAVE"
+                    ~leave_suffix:"LOCK_RELEASE"
+                    ~kind:""))
+        ~color:(0.863, 0.078, 0.235, 1.)
         ~visible:false;
     ]
   in
@@ -396,6 +419,7 @@ let benchmark filen =
           ~proc:0
           ~between:epoch
           ~granularity:0.000001
+        ()
       in
       Printf.printf "File %s: %d ratios.\n" filen (List.length ratios));
 
@@ -408,6 +432,7 @@ let benchmark filen =
           ~proc:0
           ~between:epoch
           ~min_duration:0.000001
+        ()
       in
       Printf.printf "File %s: %d GC periods.\n" filen (List.length act));
 
@@ -420,6 +445,7 @@ let benchmark filen =
           ~proc:0
           ~between:epoch
           ~min_duration:0.000001
+        ()
       in
       Printf.printf "File %s: %d runtime periods.\n" filen (List.length act));
   ()
