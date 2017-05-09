@@ -101,12 +101,12 @@ let build_keys_for_processor trace ~proc =
     let open Timeline in
     [
       make_key
-        ~name:"LCH"
+        ~name:"LCHS"
         ~kind:(Signal lch)
         ~color:(0.824, 0.706, 0.549, 1.)
         ~visible:false;
       make_key
-        ~name:"LC"
+        ~name:"LCS"
         ~kind:(Signal lc)
         ~color:(0.737, 0.561, 0.561, 1.)
         ~visible:false;
