@@ -45,18 +45,18 @@ let build_heap_keys trace =
 
 let build_keys_for_processor trace ~proc =
   let lch =
+    let max = Trace.max_locally_collectible_heap trace ~proc () in
     {
-      Timeline.max = (fun () ->
-        Trace.max_locally_collectible_heap trace ~proc ()
-      );
+      Timeline.max = (fun () -> max);
       Timeline.samples = Trace.locally_collectible_heap_between trace ~proc ();
       Timeline.alpha_mult = 0.1;
     }
   in
 
   let lc =
+    let max = Trace.max_locally_collectible trace ~proc () in
     {
-      Timeline.max = (fun () -> Trace.max_locally_collectible trace ~proc ());
+      Timeline.max = (fun () -> max);
       Timeline.samples = Trace.locally_collectible_between trace ~proc ();
       Timeline.alpha_mult = 0.1;
     }
