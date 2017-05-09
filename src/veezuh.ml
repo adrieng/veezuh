@@ -79,7 +79,7 @@ let build_keys_for_processor trace ~proc =
         ~name:"Ratio"
         ~kind:(Signal ratio)
         ~color:(0.855, 0.647, 0.125, 1.)
-        ~visible:true;
+        ~visible:false;
       make_key
         ~name:"GC"
         ~kind:(Activity (get_activites "GC"))
