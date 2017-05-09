@@ -455,6 +455,7 @@ let () =
 
   let args =
     [
+      "-sqldebug", Arg.Set Sql.debug, "Display SQL queries";
       "-benchmark", Arg.String benchmark, "Benchmark trace file";
     ]
   in
