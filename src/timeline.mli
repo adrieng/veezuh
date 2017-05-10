@@ -112,3 +112,5 @@ val fold_rows : ('a -> row -> 'a) -> 'a -> t -> 'a
 val zoom_to_global : t -> unit
 
 val zoom_to_selection : t -> unit
+
+val cancel_selection : t -> unit

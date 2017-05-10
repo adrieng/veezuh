@@ -902,3 +902,7 @@ let zoom_to_selection tl =
   | Some epoch ->
      selection_reset tl;
      change_current_epoch epoch tl
+
+let cancel_selection tl =
+  selection_reset tl;
+  redraw tl

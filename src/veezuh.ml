@@ -386,6 +386,11 @@ let build_menu_entries ~menubar ~timeline () =
   let view_factory = new GMenu.factory view_menu ~accel_group in
   ignore @@
     view_factory#add_item
+      "Cancel selection"
+      ~key:GdkKeysyms._A
+      ~callback:(fun _ -> Timeline.cancel_selection timeline);
+  ignore @@
+    view_factory#add_item
       "Zoom to default"
       ~key:GdkKeysyms._R
       ~callback:(fun _ -> Timeline.zoom_to_global timeline);
