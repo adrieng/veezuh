@@ -86,15 +86,15 @@ let build_keys_for_processor trace ~proc =
       Timeline.events = Trace.events_between trace ~proc ~kind ();
     }
   in
-  let get_activites ?enter_suffix ?leave_suffix ~kind =
+  let get_activites ~name ~enter ~leave =
     {
       Timeline.activities =
         Trace.activities_between
-          ?enter_suffix
-          ?leave_suffix
           trace
+          ~name
+          ~enter
+          ~leave
           ~proc
-          ~kind
           ();
     }
   in
@@ -133,12 +133,20 @@ let build_keys_for_processor trace ~proc =
         ~visible:false;
       make_key
         ~name:"GC"
-        ~kind:(Activity (get_activites "GC"))
+        ~kind:(Activity
+                 (get_activites
+                    ~name:"GC"
+                    ~enter:"GC_ENTER"
+                    ~leave:"GC_LEAVE"))
         ~color:(1.000, 0.271, 0.000, 0.75)
         ~visible:true;
       make_key
         ~name:"Runtime"
-        ~kind:(Activity (get_activites "RUNTIME"))
+        ~kind:(Activity
+                 (get_activites
+                    ~name:"Runtime"
+                    ~enter:"RUNTIME_ENTER"
+                    ~leave:"RUNTME_LEAVE"))
         ~color:(0.373, 0.620, 0.627, 0.75)
         ~visible:false;
       make_key
@@ -163,16 +171,20 @@ let build_keys_for_processor trace ~proc =
         ~visible:false;
       make_key
         ~name:"Lock Taking"
-        ~kind:(Activity (get_activites "LOCK_TAKE"))
+        ~kind:(Activity
+                 (get_activites
+                    ~name:"LockTaking"
+                    ~enter:"LOCK_TAKE_ENTER"
+                    ~leave:"LOCK_TAKE_LEAVE"))
         ~color:(1.000, 0.000, 0.000, 0.6)
         ~visible:false;
       make_key
-        ~name:"Lock Taken"
+        ~name:"Lock Holding"
         ~kind:(Activity
                  (get_activites
-                    ~enter_suffix:"LOCK_TAKE_LEAVE"
-                    ~leave_suffix:"LOCK_RELEASE"
-                    ~kind:""))
+                    ~name:"LockHolding"
+                    ~enter:"LOCK_TAKE_LEAVE"
+                    ~leave:"LOCK_RELEASE"))
         ~color:(0.863, 0.078, 0.235, 0.6)
         ~visible:false;
     ]
@@ -416,82 +428,27 @@ let build_toplevel_window filename =
   window#show ();
   ()
 
-let benchmark filen =
+let prepare filen =
+  print_endline ("Preparing " ^ filen);
   let trace = Trace.from_sqlite_file filen in
-  let epoch = Trace.epoch trace in
+  Trace.prepare ~verbose:true trace;
+  print_endline (filen ^ " prepared");
+  ()
 
-  let time_call f =
-    let start = Unix.gettimeofday () in
-    f ();
-    let stop = Unix.gettimeofday () in
-    Printf.printf "Elapsed: %f second(s)\n" (stop -. start)
-  in
+let purge filen =
+  print_endline ("Purging " ^ filen);
+  let trace = Trace.from_sqlite_file filen in
+  Trace.purge trace;
+  print_endline (filen ^ " purged");
+  ()
+;;
 
-  time_call
-    (fun () ->
-      let ratios =
-        Trace.ratio_between
-          trace
-          ~proc:0
-          ~between:epoch
-          ~granularity:0.000001
-        ()
-      in
-      Printf.printf "File %s: %d ratios.\n" filen (List.length ratios));
-
-  time_call
-    (fun () ->
-      let act =
-        Trace.activities_between
-          trace
-          ~kind:"GC"
-          ~proc:0
-          ~between:epoch
-          ~min_duration:0.000001
-        ()
-      in
-      Printf.printf "File %s: %d GC periods.\n" filen (List.length act));
-
-  time_call
-    (fun () ->
-      let act =
-        Trace.activities_between
-          trace
-          ~kind:"Runtime"
-          ~proc:0
-          ~between:epoch
-          ~min_duration:0.000001
-        ()
-      in
-      Printf.printf "File %s: %d runtime periods.\n" filen (List.length act));
-
-  time_call
-    (fun () ->
-      let act =
-        Trace.activities_between
-          trace
-          ~kind:"Runtime"
-          ~proc:0
-          ~between:epoch
-          ~min_duration:0.000001
-        ()
-      in
-      Printf.printf "File %s: %d runtime periods.\n" filen (List.length act));
-
-  time_call
-    (fun () ->
-      let act =
-        Trace.activities_between
-          trace
-          ~enter_suffix:"LOCK_TAKE_LEAVE"
-          ~leave_suffix:"LOCK_RELEASE"
-          ~kind:""
-          ~proc:0
-          ~between:epoch
-          ~min_duration:0.000001
-        ()
-      in
-      Printf.printf "File %s: %d locked periods.\n" filen (List.length act));
+let reprepare filen =
+  print_endline ("Repreparing " ^ filen);
+  let trace = Trace.from_sqlite_file filen in
+  Trace.purge trace;
+  Trace.prepare ~verbose:true trace;
+  print_endline (filen ^ " rebuilt");
   ()
 
 let () =
@@ -500,7 +457,9 @@ let () =
   let args =
     [
       "-sqldebug", Arg.Set Sql.debug, "Display SQL queries";
-      "-benchmark", Arg.String benchmark, "Benchmark trace file";
+      "-prep", Arg.String prepare, "Build cache tables in file";
+      "-purge", Arg.String purge, "Delete cache tables in file";
+      "-reprep", Arg.String reprepare, "Rebuild cache tables in file";
     ]
   in
 

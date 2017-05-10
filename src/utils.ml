@@ -1,5 +1,11 @@
 (* Misc stuff *)
 
+let time_call f =
+  let start = Unix.gettimeofday () in
+  f ();
+  let stop = Unix.gettimeofday () in
+  Printf.printf "Elapsed: %f second(s)\n" (stop -. start)
+
 let find_good_unit_scaling t =
   let rec find t p =
     if p >= 3 then t, p

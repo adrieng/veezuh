@@ -4,15 +4,99 @@ type t =
   {
     db : db;
     procs : int array;
+    mutable caches : (string * string) list;
   }
 
 type proc_id = int
+
+(* Low-level functions *)
 
 let tables db =
   results
     db
     Text
     "SELECT name FROM sqlite_master WHERE type = 'table';"
+
+(* Caching *)
+
+let cached_activities =
+  [
+    "GC", "GC_ENTER", "GC_LEAVE";
+    "Runtime", "RUNTIME_ENTER", "RUNTIME_LEAVE";
+    "LockTaking", "LOCK_TAKE_ENTER", "LOCK_TAKE_LEAVE";
+    "LockHolding", "LOCK_TAKE_LEAVE", "LOCK_RELEASE";
+  ]
+
+let purge trace =
+  let keep = [ "events" ] in
+  let drop s =
+    exec_check
+      trace.db
+      (Printf.sprintf "DROP TABLE %s;" s)
+  in
+  List.(tables trace.db
+        |> filter (fun s -> not @@ List.mem s keep)
+        |> iter drop);
+  trace.caches <- [];
+  ()
+
+let cache_table_name name =
+  name ^ "_activities"
+
+let create_activity_cache trace ~name ~enter ~leave =
+  let table = cache_table_name name in
+  let create_req =
+    Printf.sprintf
+      "CREATE TABLE %s(
+         argptr INTEGER,
+         enter REAL,
+         leave REAL,
+         PRIMARY KEY(argptr, enter)
+       );"
+      table
+  in
+  let insert_req =
+    Printf.sprintf
+      "INSERT INTO %s
+       SELECT e.argptr, e.time, l.time
+       FROM events e, events l
+       WHERE e.argptr = l.argptr AND e.time <= l.time
+       AND e.kind = \"%s\" AND l.kind = \"%s\"
+       AND NOT EXISTS (SELECT * FROM events b
+                       WHERE b.argptr = e.argptr AND b.kind = l.kind
+                       AND e.time < b.time AND b.time < l.time);"
+      table
+      enter
+      leave
+  in
+  exec_check trace.db create_req;
+  exec_check trace.db insert_req;
+  trace.caches <- (name, table) :: trace.caches;
+  table
+
+let find_activity_cache trace ~name ~enter ~leave =
+  try List.assoc name trace.caches
+  with Not_found -> create_activity_cache trace ~name ~enter ~leave
+
+let prepare ?(verbose = false) trace =
+  let create_cache (name, enter, leave) =
+    if List.mem_assoc name trace.caches
+    then
+      begin
+        if verbose
+        then Format.eprintf "Cache for %s already present, skipping@." name
+      end
+    else
+      begin
+        if verbose then Format.eprintf "Creating cache table for %s@." name;
+        let start = Unix.gettimeofday () in
+        ignore @@ create_activity_cache trace ~name ~enter ~leave;
+        let stop = Unix.gettimeofday () in
+        if verbose then Format.eprintf "Done in %.2f seconds@." (stop -. start);
+      end
+  in
+  List.iter create_cache cached_activities;
+  ()
 
 let processor_ids db =
   results
@@ -21,29 +105,35 @@ let processor_ids db =
     "SELECT DISTINCT(argptr) FROM events;"
   |> Array.of_list
 
-let purge db =
-  let keep = [ "events" ] in
-  let drop s =
-    exec_check
-      db
-      (Printf.sprintf "DROP TABLE %s;" s)
-  in
-  List.(tables db
-        |> filter (fun s -> not @@ List.mem s keep)
-        |> iter drop)
+(* Exposed functions *)
 
 let from_sqlite_file filename =
   let db = db_open ~mode:`NO_CREATE filename in
   let tables = tables db in
 
+  (* Check that the event table is here *)
   if not @@ List.mem "events" tables
   then failwith (filename ^ ": missing event table");
 
+  (* Check that we find some events *)
   let procs = processor_ids db in
   if Array.length procs = 0
-  then failwith (filename ^ ": no events");
+  then failwith (filename ^ ": no events?");
 
-  { db; procs; }
+  (* Populate the cache *)
+  let caches =
+    let add caches (name, _, _) =
+      let table = cache_table_name name in
+      if List.mem table tables then (name, table) :: caches else caches
+    in
+    List.fold_left add [] cached_activities
+  in
+
+  {
+    db;
+    procs;
+    caches;
+  }
 
 let epoch { db; _ } =
   let l, u =
@@ -58,33 +148,25 @@ let number_of_processors { procs; _ } =
   Array.length procs
 
 let activities_between
-      { db; procs; }
-      ~kind
-      ?(enter_suffix = "_ENTER")
-      ?(leave_suffix = "_LEAVE")
+      trace
+      ~name
+      ~enter
+      ~leave
       ~between
       ~min_duration
       ~proc
       () =
-  let enter = kind ^ enter_suffix in
-  let leave = kind ^ leave_suffix in
+  let table = find_activity_cache trace ~name ~enter ~leave in
   let req =
     Printf.sprintf
-      "SELECT e.time, l.time
-       FROM events e JOIN events l
-       WHERE e.kind = \"%s\" AND l.kind = \"%s\"
-       AND e.argptr = l.argptr AND e.argptr = %d
-       AND l.time - e.time >= %f
-       AND ((%f <= e.time AND e.time <= %f)
-            OR (%f <= l.time AND l.time <= %f)
-            OR (e.time <= %f AND l.time >= %f))
-       AND NOT EXISTS
-       (SELECT * FROM events b
-        WHERE b.kind = \"%s\" AND e.time < b.time
-        AND b.time < l.time AND b.argptr = e.argptr);"
-      enter
-      leave
-      (procs.(proc))
+      "SELECT enter, leave
+       FROM %s
+       WHERE argptr = %d AND leave - enter >= %f
+       AND ((%f <= enter AND leave <= %f)
+            OR (%f <= leave AND enter <= %f)
+            OR (enter <= %f AND leave >= %f));"
+      table
+      (trace.procs.(proc))
       min_duration
       between.Range.l
       between.Range.u
@@ -92,9 +174,8 @@ let activities_between
       between.Range.u
       between.Range.l
       between.Range.u
-      leave
   in
-  let res = results db (Pair (Real, Real)) req in
+  let res = results trace.db (Pair (Real, Real)) req in
   List.map (fun (l, u) -> Range.{ l; u; }) res
 
 let events_between { db; procs; } ~between ~proc ~kind () =

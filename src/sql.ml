@@ -57,12 +57,12 @@ let results : type a. db -> a sqlty -> string -> a list =
   | Rc.OK ->
      List.rev_map (parse ty) !r
   | err ->
-     Format.eprintf "SQLite error %s executing %s@."
+     Format.eprintf "SQLite error %s executing@\n %s@."
        (Rc.to_string err)
        req;
      []
   | exception exn ->
-     Format.eprintf "Exception %s executing %s@."
+     Format.eprintf "Exception %s executing@\n %s@."
        (Printexc.to_string exn)
        req;
      []
@@ -71,7 +71,10 @@ let result db ty req =
   List.hd @@ results db ty req
 
 let exec_check db req =
-  match exec db req with
+  if !debug then Format.eprintf "Executing request:@\n %s@." req;
+  let res = exec db req in
+  if !debug then Format.eprintf "Done@.";
+  match res with
   | Rc.OK ->
      ()
   | err ->

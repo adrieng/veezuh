@@ -2,15 +2,19 @@ type t
 
 val from_sqlite_file : string -> t
 
+val purge : t -> unit
+
+val prepare : ?verbose:bool -> t -> unit
+
 val epoch : t -> Range.span
 
 val number_of_processors : t -> int
 
 val activities_between :
   t ->
-  kind:string ->
-  ?enter_suffix:string ->
-  ?leave_suffix:string ->
+  name:string ->
+  enter:string ->
+  leave:string ->
   between:Range.span ->
   min_duration:float ->
   proc:int ->

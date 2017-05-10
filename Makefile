@@ -1,4 +1,6 @@
-.PHONY: all clean uninstall install run runbig runall
+BIN=./_build/default/src/veezuh.exe
+
+.PHONY: all clean uninstall install prepare run runbig runall
 
 all:
 	jbuilder build
@@ -12,11 +14,14 @@ install: all
 uninstall: all
 	jbuilder uninstall
 
+prepare: all
+	parallel --will-cite $(BIN) -reprep ::: datasets/*.sqlite
+
 run: all
-	./_build/default/src/veezuh.exe ./datasets/fib.32.4proc.std.sqlite
+	$(BIN) ./datasets/fib.32.4proc.std.sqlite
 
 runbig: all
-	./_build/default/src/veezuh.exe ./datasets/fib.32.4proc.hugemem.sqlite
+	$(BIN) ./datasets/fib.32.4proc.hugemem.sqlite
 
 runall: all
-	./_build/default/src/veezuh.exe ./datasets/*.sqlite
+	$(BIN) ./datasets/*.sqlite
