@@ -708,7 +708,7 @@ let click tl pressed e =
   if button = 1 then
     begin
       if pressed then selection_discrete tl t;
-      tl.selection_in_progress <- not tl.selection_in_progress;
+      tl.selection_in_progress <- pressed;
       redraw tl;
     end;
   false
