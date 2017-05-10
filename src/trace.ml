@@ -25,6 +25,10 @@ let cached_activities =
     "Runtime", "RUNTIME_ENTER", "RUNTIME_LEAVE";
     "LockTaking", "LOCK_TAKE_ENTER", "LOCK_TAKE_LEAVE";
     "LockHolding", "LOCK_TAKE_LEAVE", "LOCK_RELEASE";
+    "GSection", "GSECTION_BEGIN_ENTER", "GSECTION_END_LEAVE";
+    "GSectionWork", "GSECTION_BEGIN_LEAVE", "GSECTION_END_ENTER";
+    "GSectionEntering", "GSECTION_BEGIN_ENTER", "GSECTION_BEGIN_LEAVE";
+    "GSectionLeaving", "GSECTION_END_ENTER", "GSECTION_END_LEAVE";
   ]
 
 let purge trace =

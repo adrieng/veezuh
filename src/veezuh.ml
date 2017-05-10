@@ -187,6 +187,15 @@ let build_keys_for_processor trace ~proc =
                     ~leave:"LOCK_RELEASE"))
         ~color:(0.863, 0.078, 0.235, 0.6)
         ~visible:false;
+      make_key
+        ~name:"Global Critical Section"
+        ~kind:(Activity
+                 (get_activites
+                    ~name:"GSection"
+                    ~enter:"GSECTION_BEGIN_ENTER"
+                    ~leave:"GSECTION_END_LEAVE"))
+        ~color:(0.729, 0.333, 0.827, 0.6)
+        ~visible:false;
     ]
   in
 
