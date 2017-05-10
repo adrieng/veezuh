@@ -9,3 +9,5 @@ val truncate : span -> time -> time
 val clip : within:span -> span -> span
 
 val range : span -> time
+
+val canonicalize : span -> span

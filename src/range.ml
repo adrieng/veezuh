@@ -13,3 +13,6 @@ let clip ~within s =
 
 let range s =
   abs_float (s.l -. s.u)
+
+let canonicalize { l; u; } =
+  { l = min l u; u = max l u; }
