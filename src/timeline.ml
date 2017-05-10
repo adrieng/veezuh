@@ -3,10 +3,6 @@ open Range
 
 (* Keys *)
 
-type signal_max_callback =
-  unit ->
-  float
-
 type signal_samples_callback =
   between:Range.span ->
   granularity:float ->
@@ -28,7 +24,7 @@ type key_kind =
 
 and signal_kind =
   {
-    max : signal_max_callback;
+    max : float;
     samples : signal_samples_callback;
     alpha_mult : float;
   }
@@ -491,7 +487,7 @@ let draw_key ~ymin ~y ~h tl cr (key : key) =
       match key.kind with
       | Signal ksignal ->
          let granularity = time_per_pixel tl in
-         let vmax = ksignal.max () in
+         let vmax = ksignal.max in
          let samples = ksignal.samples ~between ~granularity in
 
          let ymax = y +. h in

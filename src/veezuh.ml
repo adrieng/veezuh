@@ -27,7 +27,7 @@ let build_heap_keys trace =
     let kind =
       Timeline.Signal
         {
-          Timeline.max = (fun () -> Trace.max_occupancy trace);
+          Timeline.max = Trace.max_occupancy trace;
           Timeline.samples = Trace.occupancy_between trace ();
           Timeline.alpha_mult = 0.1;
         }
@@ -45,18 +45,16 @@ let build_heap_keys trace =
 
 let build_keys_for_processor trace ~proc =
   let lch =
-    let max = Trace.max_locally_collectible_heap trace ~proc () in
     {
-      Timeline.max = (fun () -> max);
+      Timeline.max = Trace.max_locally_collectible_heap trace ~proc ();
       Timeline.samples = Trace.locally_collectible_heap_between trace ~proc ();
       Timeline.alpha_mult = 0.1;
     }
   in
 
   let lc =
-    let max = Trace.max_locally_collectible trace ~proc () in
     {
-      Timeline.max = (fun () -> max);
+      Timeline.max = Trace.max_locally_collectible trace ~proc ();
       Timeline.samples = Trace.locally_collectible_between trace ~proc ();
       Timeline.alpha_mult = 0.1;
     }
@@ -65,7 +63,7 @@ let build_keys_for_processor trace ~proc =
   let ratio_max = Trace.max_ratio trace ~proc in
   let ratio =
     {
-      Timeline.max = (fun () -> ratio_max);
+      Timeline.max = ratio_max;
       Timeline.samples = Trace.ratio_between trace ~proc ();
       Timeline.alpha_mult = 0.1;
     }
@@ -77,7 +75,7 @@ let build_keys_for_processor trace ~proc =
       [(between.Range.l, cratio_max)]
     in
     {
-      Timeline.max = (fun () -> ratio_max);
+      Timeline.max = ratio_max;
       Timeline.samples = samples;
       Timeline.alpha_mult = 0.1;
     }

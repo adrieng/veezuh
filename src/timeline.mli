@@ -1,9 +1,5 @@
 (* Keys *)
 
-type signal_max_callback =
-  unit ->
-  float
-
 type signal_samples_callback =
   between:Range.span ->
   granularity:float ->
@@ -25,7 +21,7 @@ type key_kind =
 
 and signal_kind =
   {
-    max : signal_max_callback;
+    max : float;
     samples : signal_samples_callback;
     alpha_mult : float;
   }
