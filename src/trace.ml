@@ -58,13 +58,11 @@ let create_activity_cache trace ~name ~enter ~leave =
   let insert_req =
     Printf.sprintf
       "INSERT INTO %s
-       SELECT e.argptr, e.time, l.time
+       SELECT e.argptr, e.time, min(l.time)
        FROM events e, events l
        WHERE e.argptr = l.argptr AND e.time <= l.time
        AND e.kind = \"%s\" AND l.kind = \"%s\"
-       AND NOT EXISTS (SELECT * FROM events b
-                       WHERE b.argptr = e.argptr AND b.kind = l.kind
-                       AND e.time < b.time AND b.time < l.time);"
+       GROUP BY e.argptr, e.time;"
       table
       enter
       leave
