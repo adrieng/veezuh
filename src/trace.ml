@@ -48,10 +48,11 @@ let cache_table_name name =
   name ^ "_activities"
 
 let create_activity_cache trace ~name ~enter ~leave =
+  (* Create the activity table *)
   let table = cache_table_name name in
   let create_req =
     Printf.sprintf
-      "CREATE TABLE %s(
+      "CREATE TEMPORARY TABLE %s(
          argptr INTEGER,
          enter REAL,
          leave REAL,
@@ -59,20 +60,41 @@ let create_activity_cache trace ~name ~enter ~leave =
        );"
       table
   in
-  let insert_req =
+  exec_check trace.db create_req;
+  (* Create two temporary tables for labeling. *)
+  let create_temp ~name ~kind =
+    let req =
+      Printf.sprintf
+        "CREATE TABLE %s(
+           id INTEGER,
+           argptr INTEGER,
+           time REAL,
+           PRIMARY KEY(id)
+         );
+         INSERT INTO %s
+         SELECT NULL, argptr, time
+         FROM events
+         WHERE kind = '%s'
+         ORDER BY argptr, time;"
+        name
+        name
+        kind
+    in
+    exec_check trace.db req
+  in
+  create_temp ~name:"tmp1" ~kind:enter;
+  create_temp ~name:"tmp2" ~kind:leave;
+  (* Merge events with matching ids *)
+  let merge_req =
     Printf.sprintf
       "INSERT INTO %s
-       SELECT e.argptr, e.time, min(l.time)
-       FROM events e, events l
-       WHERE e.argptr = l.argptr AND e.time <= l.time
-       AND e.kind = \"%s\" AND l.kind = \"%s\"
-       GROUP BY e.argptr, e.time;"
+       SELECT e.argptr, e.time, l.time
+       FROM tmp1 e, tmp2 l
+       WHERE e.id = l.id;"
       table
-      enter
-      leave
   in
-  exec_check trace.db create_req;
-  exec_check trace.db insert_req;
+  exec_check trace.db merge_req;
+  exec_check trace.db "DROP TABLE tmp1; DROP TABLE tmp2;";
   trace.caches <- (name, table) :: trace.caches;
   table
 
