@@ -193,6 +193,12 @@ type t =
     vsc : GRange.range;
 
     hsc : GRange.range;
+
+    (* Offscreen drawing buffer *)
+
+    mutable img : Cairo.Surface.t;
+
+    mutable img_dirty : bool;
   }
 
 (* Low-level functions *)
@@ -364,7 +370,8 @@ let configure_scrollbars tl =
   tl.vsc#adjustment#set_page_size (chart_height_f tl);
   ()
 
-let redraw ?(scrollbars = false) tl =
+let redraw ?(dirty = false) ?(scrollbars = false) tl =
+  tl.img_dirty <- tl.img_dirty || dirty;
   if scrollbars then configure_scrollbars tl;
   GtkBase.Widget.queue_draw tl.da#as_widget
 
@@ -640,10 +647,28 @@ let draw_selection tl cr =
      ()
 ;;
 
+let draw_buffered tl cr =
+  if tl.img_dirty
+  then
+    begin
+      tl.img_dirty <- false;
+      tl.img <-
+        Cairo.Surface.create_similar
+          (Cairo.get_target cr)
+          Cairo.COLOR_ALPHA
+          ~width:(width tl)
+          ~height:(height tl);
+      let cr_os = Cairo.create tl.img in
+      draw_background tl cr_os;
+      draw_scale_bar tl cr_os;
+      iter_visible_rows (draw_row tl cr_os) tl
+    end;
+  Cairo.set_source_surface cr tl.img ~x:0. ~y:0.;
+  Cairo.paint cr;
+  ()
+
 let draw_timeline tl cr =
-  draw_background tl cr;
-  draw_scale_bar tl cr;
-  iter_visible_rows (draw_row tl cr) tl;
+  draw_buffered tl cr;
   draw_selection tl cr;
   ()
 ;;
@@ -652,7 +677,7 @@ let draw_timeline tl cr =
 
 let change_current_epoch ~epoch tl =
   tl.current_epoch <- Range.clip ~within:tl.global_epoch epoch;
-  redraw ~scrollbars:true tl
+  redraw ~dirty:true ~scrollbars:true tl
 
 let zoom ~x ~factor tl =
   let xr = x /. chart_width_f tl in
@@ -700,11 +725,13 @@ let move tl e =
   false
 
 let expose tl _ =
-  draw_timeline tl @@ Cairo_gtk.create tl.da#misc#window;
+  let cr = Cairo_gtk.create tl.da#misc#window in
+  draw_timeline tl cr;
   false
 
 let configure tl _ =
   configure_scrollbars tl;
+  tl.img_dirty <- true;
   false
 
 let scrollbar_value_changed tl () =
@@ -714,7 +741,7 @@ let scrollbar_value_changed tl () =
   tl.current_epoch <- { l; u; };
   (* Vertical scrollbar *)
   tl.current_visible_chart_top <- tl.vsc#adjustment#value;
-  redraw tl;
+  redraw ~dirty:true tl;
   ()
 
 let mouse_wheel tl e =
@@ -820,6 +847,9 @@ let make
       da;
       vsc;
       hsc;
+
+      img = Utils.offscreen_surface_for_drawing_area da;
+      img_dirty = true;
     }
   in
   ignore @@ da#event#connect#configure ~callback:(configure tl);
@@ -845,7 +875,7 @@ let make
   tl
 
 let refresh tl =
-  redraw ~scrollbars:true tl
+  redraw ~dirty:true ~scrollbars:true tl
 
 let add_row tl r =
   let new_rows = r :: tl.rows in

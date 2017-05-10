@@ -1,3 +1,50 @@
+(* Misc stuff *)
+
+let find_good_unit_scaling t =
+  let rec find t p =
+    if p >= 3 then t, p
+    else if t < 0.01 then find (t *. 1000.) (p + 1)
+    else t, p
+  in
+  let _, p = find t 0 in
+  1000. ** float p, List.nth ["s"; "ms"; "us"; "ns"] p
+
+let get_opt o =
+  match o with
+  | None ->
+     failwith "get_opt"
+  | Some x ->
+     x
+
+let print_string fmt s =
+  Format.fprintf fmt "%s" s
+
+let print_array print fmt arr =
+  let l = Array.length arr in
+  Format.fprintf fmt "@[<hv 2>";
+  for i = 0 to l - 2 do
+    Format.fprintf fmt "%a,@ "
+      print arr.(i);
+  done;
+  if l > 0
+  then
+    Format.fprintf fmt "%a"
+      print arr.(l - 1);
+  Format.fprintf fmt "@]";
+  ()
+
+let print_string_array =
+  print_array print_string
+
+module SSet =
+  Set.Make
+    (
+      struct
+        type t = string
+        let compare = Pervasives.compare
+      end
+    )
+
 (* Math stuff *)
 
 let pi = 4. *. atan 1.
@@ -96,49 +143,9 @@ let gdk_color_of_rgba (r, g, b, _) =
   let r, g, b = f r, f g, f b in
   GDraw.color (`RGB (r, g, b))
 
-(* Misc stuff *)
+(* Cairo stufff *)
 
-let find_good_unit_scaling t =
-  let rec find t p =
-    if p >= 3 then t, p
-    else if t < 0.01 then find (t *. 1000.) (p + 1)
-    else t, p
-  in
-  let _, p = find t 0 in
-  1000. ** float p, List.nth ["s"; "ms"; "us"; "ns"] p
-
-let get_opt o =
-  match o with
-  | None ->
-     failwith "get_opt"
-  | Some x ->
-     x
-
-let print_string fmt s =
-  Format.fprintf fmt "%s" s
-
-let print_array print fmt arr =
-  let l = Array.length arr in
-  Format.fprintf fmt "@[<hv 2>";
-  for i = 0 to l - 2 do
-    Format.fprintf fmt "%a,@ "
-      print arr.(i);
-  done;
-  if l > 0
-  then
-    Format.fprintf fmt "%a"
-      print arr.(l - 1);
-  Format.fprintf fmt "@]";
-  ()
-
-let print_string_array =
-  print_array print_string
-
-module SSet =
-  Set.Make
-    (
-      struct
-        type t = string
-        let compare = Pervasives.compare
-      end
-    )
+let offscreen_surface_for_drawing_area da =
+  let width = da#misc#allocation.Gtk.width in
+  let height = da#misc#allocation.Gtk.height in
+  Cairo.Image.create Cairo.Image.ARGB32 ~width ~height
