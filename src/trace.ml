@@ -309,4 +309,4 @@ let max_control_ratio { db; procs; } ~proc () =
        "
       procs.(proc)
   in
-  result db Real req
+  try result db Real req with _ -> 0.
