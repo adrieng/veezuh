@@ -150,6 +150,11 @@ let build_keys_for_processor trace ~proc =
         ~color:(0.373, 0.620, 0.627, 0.75)
         ~visible:false;
       make_key
+        ~name:"Initialization"
+        ~kind:(Event (get_events "INIT"))
+        ~color:(0.498, 1.000, 0.831, 1.)
+        ~visible:false;
+      make_key
         ~name:"Thread Copy"
         ~kind:(Event (get_events "THREAD_COPY"))
         ~color:(0.196, 0.804, 0.196, 1.)
@@ -170,9 +175,13 @@ let build_keys_for_processor trace ~proc =
         ~color:(0.855, 0.647, 0.125, 1.)
         ~visible:false;
       make_key
-        ~name:"Initialization"
-        ~kind:(Event (get_events "INIT"))
-        ~color:(0.498, 1.000, 0.831, 1.)
+        ~name:"Global Critical Section"
+        ~kind:(Activity
+                 (get_activites
+                    ~name:"GSection"
+                    ~enter:"GSECTION_BEGIN_ENTER"
+                    ~leave:"GSECTION_END_LEAVE"))
+        ~color:(0.729, 0.333, 0.827, 0.6)
         ~visible:false;
       make_key
         ~name:"Lock Taking"
@@ -191,15 +200,6 @@ let build_keys_for_processor trace ~proc =
                     ~enter:"LOCK_TAKE_LEAVE"
                     ~leave:"LOCK_RELEASE"))
         ~color:(0.863, 0.078, 0.235, 0.6)
-        ~visible:false;
-      make_key
-        ~name:"Global Critical Section"
-        ~kind:(Activity
-                 (get_activites
-                    ~name:"GSection"
-                    ~enter:"GSECTION_BEGIN_ENTER"
-                    ~leave:"GSECTION_END_LEAVE"))
-        ~color:(0.729, 0.333, 0.827, 0.6)
         ~visible:false;
     ]
   in
@@ -251,7 +251,12 @@ let key_toggled
      (* User clicked on a key *)
      let pname = info.store#get ~row:prow ~column:info.cname in
      match pname with
-     | "Per-processor" ->
+     | "Heap" ->
+        let row = Timeline.find_row timeline pname in
+        let key = Timeline.row_find_key row name in
+        Timeline.set_key_visible key ~visible:enabled;
+        Timeline.refresh timeline
+     | _ ->
         (* Toggle for all events *)
         let toggle row =
           match Timeline.row_find_key row name with
@@ -261,11 +266,6 @@ let key_toggled
              ()
         in
         Timeline.iter_rows toggle timeline
-     | _ ->
-        let row = Timeline.find_row timeline pname in
-        let key = Timeline.row_find_key row name in
-        Timeline.set_key_visible key ~visible:enabled;
-        Timeline.refresh timeline
   end;
   Timeline.refresh timeline
 
@@ -309,8 +309,43 @@ let add_global_model_row_from_tl_rows info rows =
   let row = info.store#append () in
   info.store#set ~row ~column:info.cname "Per-processor";
   info.store#set ~row ~column:info.cvisible false;
+
+  let make_category_row name =
+    let cat_row = info.store#append ~parent:row () in
+    info.store#set ~row:cat_row ~column:info.cname name;
+    info.store#set ~row:cat_row ~column:info.cvisible false;
+    cat_row
+  in
+
+  let global_row = make_category_row "Global" in
+  let concurrency_row = make_category_row "Concurrency" in
+  let hh_row = make_category_row "Hierarchical Heap" in
+
+  let find_parent_row_for_key key =
+    match Timeline.get_key_name key with
+    | "GC" | "Runtime"
+    | "Thread Copy"
+    | "Initialization" | "Halt Request" | "Halt Ack"
+      ->
+       global_row
+
+    | "Lock Taking" | "Lock Holding"
+    | "Global Critical Section"
+      ->
+       concurrency_row
+    | "LCHS" | "LCS" | "LCHS/LCS" | "LCHS/LCS control"
+    | "GC Abort"
+      ->
+       hh_row
+    | _ ->
+       row
+  in
   let add seen r =
-    Timeline.row_fold_keys (add_model_row_from_key_not_seen info row) seen r
+    let add seen k =
+      let parent = find_parent_row_for_key k in
+      add_model_row_from_key_not_seen info parent seen k
+    in
+    Timeline.row_fold_keys add seen r
   in
   ignore @@ List.fold_left add Utils.SSet.empty rows
 
