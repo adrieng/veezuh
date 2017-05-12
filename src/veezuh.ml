@@ -394,8 +394,14 @@ let build_info_from_timeline_rows ~packing () =
   }
 
 let build_key_pane trace ~packing () =
-  (* Build graphical components *)
-  let frame = GBin.frame ~label:"Keys" ~packing ~border_width:5 () in
+  let frame =
+    GBin.scrolled_window
+      ~hpolicy:`AUTOMATIC
+      ~vpolicy:`ALWAYS
+      ~width:265
+      ~packing
+      ()
+  in
   let info = build_info_from_timeline_rows ~packing:frame#add () in
 
   (* Populate the model for the TreeView *)
