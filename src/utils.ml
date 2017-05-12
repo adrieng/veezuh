@@ -74,7 +74,7 @@ let white = 1., 1., 1., 1.
 let transparent = 1., 1., 1., 0.
 
 let grey_background =
-  0.05, 0.05, 0.05, 0.08
+  0.05, 0.05, 0.05, 0.12
 
 let set_rgba cr (r, g, b, a) =
   Cairo.set_source_rgba cr ~r ~g ~b ~a

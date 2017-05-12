@@ -103,7 +103,7 @@ let build_keys_for_processor trace ~proc =
     Timeline.make_row
       ~name:(row_name_for_processor proc)
       ~rank:(proc + 1)
-      ~height:100
+      ~height:75
       ~background:Utils.grey_background
       ~visible:true
   in

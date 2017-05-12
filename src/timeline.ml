@@ -574,43 +574,6 @@ let draw_row tl cr ~y ~h row =
 
   ()
 
-(* let draw_processors_chart tl cr = *)
-(*   let p_min, p_max = visible_processors tl in *)
-(*   for p = p_min to p_max do *)
-(*     (\* Draw the default per-processor activity background. *\) *)
-(*     set_rgba cr tl.color_proc_active; *)
-(*     draw_epoch_on_processor ~p tl cr tl.current_epoch; *)
-
-(*     (\* Draw activites. We do not draw the ones that are really small in order to *)
-(*     try to lower query cost on huge files. *\) *)
-
-(*     let min_duration = time_per_pixel tl /. tl.activity_duration_factor in *)
-
-(*     let draw_activities_of_kind (kind, color) = *)
-(*       Utils.set_rgba cr color; *)
-(*       tl.get_activities *)
-(*         ~kind *)
-(*         ~for_proc:p *)
-(*         ~between:tl.current_epoch *)
-(*         ~min_duration *)
-(*       |> List.iter (draw_epoch_on_processor ~p tl cr) *)
-(*     in *)
-
-(*     List.iter draw_activities_of_kind tl.activities; *)
-
-(*     let draw_events_of_kind (kind, color) = *)
-(*       Utils.set_rgba cr color; *)
-(*       tl.get_events *)
-(*         ~kind *)
-(*         ~for_proc:p *)
-(*         ~between:tl.current_epoch *)
-(*       |> List.iter (draw_event_on_processor ~p tl cr) *)
-(*     in *)
-
-(*     List.iter draw_events_of_kind tl.events; *)
-(*   done; *)
-(*   () *)
-
 let draw_selection tl cr =
   match tl.current_selection with
   | None ->
