@@ -165,6 +165,11 @@ let build_keys_for_processor trace ~proc =
         ~color:(0.502, 0.000, 0.000, 1.)
         ~visible:false;
       make_key
+        ~name:"Halt Ack"
+        ~kind:(Event (get_events "HALT_ACK"))
+        ~color:(0.855, 0.647, 0.125, 1.)
+        ~visible:false;
+      make_key
         ~name:"Initialization"
         ~kind:(Event (get_events "INIT"))
         ~color:(0.498, 1.000, 0.831, 1.)
