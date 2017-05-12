@@ -292,8 +292,10 @@ let chart_pos_of_drawing_pos tl x =
 (* Derived graphical parameters *)
 
 let total_chart_height tl =
-  number_of_rows tl * tl.chart_vertical_spacing
-  + List.fold_left (fun acc r -> acc + r.height) 0 tl.rows
+  let add acc r =
+    acc + if r.visible then r.height + tl.chart_vertical_spacing else 0
+  in
+  List.fold_left add 0 tl.rows
 
 let total_chart_height_f tl =
   float @@ total_chart_height tl
@@ -302,27 +304,27 @@ let position_of_increment tl i =
   float (chart_left tl) +. pixels_per_increment tl *. float i
 
 let iter_rows_between f tl ~ymin ~ymax =
-  let rec iter y rows =
+  let rec iter ~ychart ~yview rows =
     match rows with
     | [] ->
        ()
     | r :: rows ->
+       let ychart' = ychart + r.height + tl.chart_vertical_spacing in
        if r.visible
        then
-         begin
-           if y + r.height >= ymin then
-             begin
-               let yreal = if y < ymin then ymin else y in
-               let h = if y + r.height >= ymax then ymax - y else r.height in
-               f ~ymin:y ~y:yreal ~h r
-             end;
-           let y = y + r.height + tl.chart_vertical_spacing in
-           if y < ymax then iter y rows
-         end
-       else
-         iter y rows
+         if ychart + r.height < ymin then iter ~ychart:ychart' ~yview rows
+         else if ychart >= ymax then ()
+         else
+           let h =
+             if ychart < ymin then ychart + r.height - ymin
+             else if ychart + r.height >= ymax then ymax - ychart
+             else r.height
+           in
+           f ~y:yview ~h r;
+           let yview' = yview + h + tl.chart_vertical_spacing in
+           iter ~ychart:ychart' ~yview:yview' rows
   in
-  iter (chart_top tl) tl.rows
+  iter 0 (chart_top tl) tl.rows
 
 let iter_visible_rows f tl =
   let ymin = int_of_float tl.current_visible_chart_top in
@@ -368,6 +370,7 @@ let configure_scrollbars tl =
   tl.vsc#adjustment#set_upper (total_chart_height_f tl);
   tl.vsc#adjustment#set_value tl.current_visible_chart_top;
   tl.vsc#adjustment#set_page_size (chart_height_f tl);
+  tl.vsc#adjustment#set_step_increment (chart_height_f tl /. 10.);
   ()
 
 let redraw ?(dirty = false) ?(scrollbars = false) tl =
@@ -486,7 +489,7 @@ let draw_scale_bar
 
   ()
 
-let draw_key ~ymin ~y ~h tl cr (key : key) =
+let draw_key ~y ~h tl cr (key : key) =
   if key.visible then
     begin
       let between = tl.current_epoch in
@@ -546,7 +549,7 @@ let draw_key ~ymin ~y ~h tl cr (key : key) =
          List.iter (draw_event ~y ~h tl cr) events
     end
 
-let draw_row tl cr ~ymin ~y ~h row =
+let draw_row tl cr ~y ~h row =
   let y = float y in
   let h = float h in
 
@@ -567,7 +570,7 @@ let draw_row tl cr ~ymin ~y ~h row =
   draw_epoch ~y ~h tl cr tl.current_epoch;
 
   (* Draw keys *)
-  List.iter (draw_key ~ymin ~y ~h tl cr) row.keys;
+  List.iter (draw_key ~y ~h tl cr) row.keys;
 
   ()
 
