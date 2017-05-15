@@ -52,7 +52,7 @@ let create_activity_cache trace ~name ~enter ~leave =
   let table = cache_table_name name in
   let create_req =
     Printf.sprintf
-      "CREATE TEMPORARY TABLE %s(
+      "CREATE TABLE %s(
          argptr INTEGER,
          enter REAL,
          leave REAL,
@@ -65,7 +65,7 @@ let create_activity_cache trace ~name ~enter ~leave =
   let create_temp ~name ~kind =
     let req =
       Printf.sprintf
-        "CREATE TABLE %s(
+        "CREATE TEMPORARY TABLE %s(
            id INTEGER,
            argptr INTEGER,
            time REAL,
