@@ -1,6 +1,6 @@
 BIN=./_build/default/src/veezuh.exe
 
-.PHONY: all clean uninstall install prepare run runbig runall
+.PHONY: all clean uninstall install prepare run runbig runall stats
 
 all:
 	jbuilder build
@@ -25,3 +25,6 @@ runbig: all
 
 runall: all
 	$(BIN) ./datasets/*.sqlite
+
+stats: all
+	$(BIN) -stats ./datasets/fib.32.4proc.std.sqlite

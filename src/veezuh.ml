@@ -511,6 +511,14 @@ let reprepare filen =
   print_endline (filen ^ " rebuilt");
   ()
 
+let statistics filen =
+  print_endline ("Computing statistics for " ^ filen);
+  let trace = Trace.from_sqlite_file filen in
+  let stats = Trace.statistics trace in
+  Format.printf "%a@?"
+    Trace.print_stats stats;
+  ()
+
 let () =
   let files = ref [] in
 
@@ -520,6 +528,7 @@ let () =
       "-prep", Arg.String prepare, "Build cache tables in file";
       "-purge", Arg.String purge, "Delete cache tables in file";
       "-reprep", Arg.String reprepare, "Rebuild cache tables in file";
+      "-stats", Arg.String statistics, "Display statistics for file";
     ]
   in
 

@@ -1,5 +1,8 @@
 (* Misc stuff *)
 
+let sum l =
+  List.fold_left (+.) 0. l
+
 let time_call f =
   let start = Unix.gettimeofday () in
   f ();

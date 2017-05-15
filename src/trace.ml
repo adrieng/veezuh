@@ -14,18 +14,24 @@ type proc_id = int
 let tables db =
   results
     db
-    Text
+    text
     "SELECT name FROM sqlite_master WHERE type = 'table';"
 
 (* Caching *)
 
+let gc_events =
+  "GC", "GC_ENTER", "GC_LEAVE"
+
+let gsection_events =
+  "GSection", "GSECTION_BEGIN_ENTER", "GSECTION_END_LEAVE"
+
 let cached_activities =
   [
-    "GC", "GC_ENTER", "GC_LEAVE";
+    gc_events;
     "Runtime", "RUNTIME_ENTER", "RUNTIME_LEAVE";
     "LockTaking", "LOCK_TAKE_ENTER", "LOCK_TAKE_LEAVE";
     "LockHolding", "LOCK_TAKE_LEAVE", "LOCK_RELEASE";
-    "GSection", "GSECTION_BEGIN_ENTER", "GSECTION_END_LEAVE";
+    gsection_events;
     "GSectionWork", "GSECTION_BEGIN_LEAVE", "GSECTION_END_ENTER";
     "GSectionEntering", "GSECTION_BEGIN_ENTER", "GSECTION_BEGIN_LEAVE";
     "GSectionLeaving", "GSECTION_END_ENTER", "GSECTION_END_LEAVE";
@@ -102,6 +108,14 @@ let find_activity_cache trace ~name ~enter ~leave =
   try List.assoc name trace.caches
   with Not_found -> create_activity_cache trace ~name ~enter ~leave
 
+let find_gc_cache_table trace =
+  let name, enter, leave = gc_events in
+  find_activity_cache trace ~name ~enter ~leave
+
+let find_gsection_cache_table trace =
+  let name, enter, leave = gsection_events in
+  find_activity_cache trace ~name ~enter ~leave
+
 let prepare ?(verbose = false) trace =
   let create_cache (name, enter, leave) =
     if List.mem_assoc name trace.caches
@@ -125,7 +139,7 @@ let prepare ?(verbose = false) trace =
 let processor_ids db =
   results
     db
-    Int
+    int_
     "SELECT DISTINCT(argptr) FROM events;"
   |> Array.of_list
 
@@ -163,7 +177,7 @@ let epoch { db; _ } =
   let l, u =
     result
       db
-      (Pair (Real, Real))
+      real2
       "SELECT MIN(time), MAX(time) FROM events;"
   in
   Range.{ l; u; }
@@ -199,7 +213,7 @@ let activities_between
       between.Range.l
       between.Range.u
   in
-  let res = results trace.db (Pair (Real, Real)) req in
+  let res = results trace.db real2 req in
   List.map (fun (l, u) -> Range.{ l; u; }) res
 
 let events_between { db; procs; } ~between ~proc ~kind () =
@@ -213,12 +227,12 @@ let events_between { db; procs; } ~between ~proc ~kind () =
       between.Range.u
       procs.(proc)
   in
-  results db Real req
+  results db real req
 
 let max_occupancy { db; _ } =
   try
     let req = "SELECT max(arg1) FROM events WHERE kind = \"HEAP_OCCUPANCY\";" in
-    result db Real req
+    result db real req
   with _ ->
     0.
 
@@ -232,7 +246,7 @@ let occupancy_between { db; _ } ~between ~granularity () =
       between.Range.l
       between.Range.u
   in
-  results db (Pair (Real, Real)) req
+  results db real2 req
 
 let max_ratio { db; procs } ~proc =
   try
@@ -243,7 +257,7 @@ let max_ratio { db; procs } ~proc =
          WHERE kind = \"HEAP_RATIO\" AND argptr = %d AND arg2 > 0;"
         procs.(proc)
     in
-    result db Real req
+    result db real req
   with _ ->
     0.
 
@@ -260,7 +274,7 @@ let ratio_between { db; procs } ~between ~proc ~granularity () =
       between.Range.u
       procs.(proc)
   in
-  results db (Pair (Real, Real)) req
+  results db real2 req
 
 let max_locally_collectible { db; procs; } ~proc () =
   try
@@ -271,7 +285,7 @@ let max_locally_collectible { db; procs; } ~proc () =
          WHERE kind = \"HEAP_RATIO\" AND argptr = %d;"
         procs.(proc)
     in
-    result db Real req
+    result db real req
   with _ ->
     0.
 
@@ -288,7 +302,7 @@ let locally_collectible_between { db; procs } ~between ~proc ~granularity () =
       between.Range.u
       procs.(proc)
   in
-  results db (Pair (Real, Real)) req
+  results db real2 req
 
 let max_locally_collectible_heap { db; procs; } ~proc () =
   try
@@ -299,7 +313,7 @@ let max_locally_collectible_heap { db; procs; } ~proc () =
          WHERE kind = \"HEAP_RATIO\" AND argptr = %d;"
         procs.(proc)
     in
-    result db Real req
+    result db real req
   with _ ->
     0.
 
@@ -321,7 +335,7 @@ let locally_collectible_heap_between
       between.Range.u
       procs.(proc)
   in
-  results db (Pair (Real, Real)) req
+  results db real2 req
 
 let max_control_ratio { db; procs; } ~proc () =
   (* granularity ignored for now *)
@@ -333,4 +347,212 @@ let max_control_ratio { db; procs; } ~proc () =
        "
       procs.(proc)
   in
-  try result db Real req with _ -> 0.
+  try result db real req with _ -> 0.
+
+(* Statistics *)
+
+type proc_stats =
+  {
+    total_exec_time : Range.time;
+    total_gc_time : Range.time;
+    total_gsec_time : Range.time;
+    total_mut_time : Range.time;
+  }
+
+let print_proc_stats fmt pstats =
+  Format.fprintf fmt "EXEC TIME: %a@ "
+    Range.print_time pstats.total_exec_time;
+  Format.fprintf fmt "GC TIME: %a (%.2f%%)@ "
+    Range.print_time pstats.total_gc_time
+    (pstats.total_gc_time /. pstats.total_exec_time *. 100.);
+  Format.fprintf fmt "GSEC TIME: %a (%.2f%%)@ "
+    Range.print_time pstats.total_gsec_time
+    (pstats.total_gsec_time /. pstats.total_exec_time *. 100.);
+  Format.fprintf fmt "MUT TIME: %a (%.2f%%)"
+    Range.print_time pstats.total_mut_time
+    (pstats.total_mut_time /. pstats.total_exec_time *. 100.);
+  ()
+
+let processor_statistics ~proc trace =
+  let proc_id = trace.procs.(proc) in
+  let gc_table = find_gc_cache_table trace in
+  let gsection_table = find_gsection_cache_table trace in
+
+  let total_exec_time =
+    let req =
+      Printf.sprintf
+        "SELECT max(time)-min(time)
+         FROM events
+         WHERE argptr = %d;"
+        proc_id
+    in
+    result
+      trace.db
+      real
+      req
+  in
+
+  let total_gc_time =
+    let req =
+      Printf.sprintf
+        "SELECT sum(leave - enter)
+         FROM %s
+         WHERE argptr = %d;"
+        gc_table
+        proc_id
+    in
+    match result trace.db realo req with
+    | None ->
+       0.
+    | Some f ->
+       f
+  in
+
+  let total_gsec_time =
+    let req =
+      Printf.sprintf
+        "SELECT sum(leave - enter)
+         FROM %s
+         WHERE argptr = %d;"
+        gsection_table
+        proc_id
+    in
+    match result trace.db realo req with
+    | None ->
+       0.
+    | Some f ->
+       f
+  in
+
+  let total_gc_nogsec_time =
+    let req =
+      Printf.sprintf
+        "SELECT sum(gc.leave - gc.enter)
+         FROM %s gc
+         WHERE gc.argptr = %d
+         AND NOT EXISTS (SELECT *
+                         FROM %s gsec
+                         WHERE gsec.argptr = gc.argptr
+                         AND gsec.enter <= gc.enter
+                         AND gc.leave <= gsec.leave);"
+        gc_table
+        proc_id
+        gsection_table
+    in
+    match result trace.db realo req with
+    | None ->
+       0.
+    | Some f ->
+       f
+  in
+
+  let total_gsec_nogc_time =
+    let req =
+      Printf.sprintf
+        "SELECT sum(gsec.leave - gsec.enter)
+         FROM %s gsec
+         WHERE gsec.argptr = %d
+         AND NOT EXISTS (SELECT *
+                         FROM %s gc
+                         WHERE gsec.argptr = gc.argptr
+                         AND gc.enter <= gsec.enter
+                         AND gsec.leave <= gc.leave);"
+        gsection_table
+        proc_id
+        gc_table
+    in
+    match result trace.db realo req with
+    | None ->
+       0.
+    | Some f ->
+       f
+  in
+
+  let total_mut_time =
+    total_exec_time -. total_gc_nogsec_time -. total_gsec_nogc_time
+  in
+
+  {
+    total_exec_time;
+    total_gc_time;
+    total_gsec_time;
+    total_mut_time;
+  }
+
+type stats =
+  {
+    real_exec_time : Range.time;
+    user_exec_time : Range.time;
+    user_gc_time : Range.time;
+    user_mut_time : Range.time;
+    per_proc_stats : proc_stats list;
+  }
+
+let print_stats
+      fmt
+      {
+        real_exec_time;
+        user_exec_time;
+        user_gc_time;
+        user_mut_time;
+        per_proc_stats;
+      } =
+  let print_proc_i i pstats =
+    Format.fprintf fmt "@[@[<v 2>PROC %d:@ %a@]@]@\n"
+      i
+      print_proc_stats pstats
+  in
+
+  Format.fprintf fmt "REAL EXEC TIME: %a@\n"
+    Range.print_time real_exec_time;
+  Format.fprintf fmt "USER EXEC TIME: %a@\n"
+    Range.print_time user_exec_time;
+  Format.fprintf fmt "USER GC TIME: %a (%.2f%%)@\n"
+    Range.print_time user_gc_time
+    (user_gc_time /. user_exec_time *. 100.);
+  Format.fprintf fmt "USER MUT TIME: %a (%.2f%%)@\n"
+    Range.print_time user_mut_time
+    (user_mut_time /. user_exec_time *. 100.);
+  List.iteri print_proc_i per_proc_stats;
+  ()
+
+let statistics trace =
+  let per_proc_stats =
+    let r = ref [] in
+    for i = number_of_processors trace - 1 downto 0 do
+      r := processor_statistics ~proc:i trace :: !r
+    done;
+    !r
+  in
+  let real_exec_time =
+    result
+      trace.db
+      real
+      "SELECT max(time)-min(time)
+       FROM events;"
+  in
+  let user_exec_time =
+    result
+      trace.db
+      real
+      "SELECT sum(T)
+       FROM (SELECT max(time)-min(time) T
+             FROM events
+             GROUP BY argptr);"
+  in
+
+  let user_gc_time =
+    List.map (fun pstats -> pstats.total_gc_time) per_proc_stats |> Utils.sum
+  in
+
+  let user_mut_time =
+    List.map (fun pstats -> pstats.total_mut_time) per_proc_stats |> Utils.sum
+  in
+
+  {
+    real_exec_time;
+    user_exec_time;
+    user_gc_time;
+    user_mut_time;
+    per_proc_stats;
+  }

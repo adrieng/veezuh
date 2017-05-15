@@ -86,3 +86,30 @@ val max_control_ratio :
   proc:int ->
   unit ->
   float
+
+(* Statistics *)
+
+type proc_stats =
+  {
+    total_exec_time : Range.time;
+    total_gc_time : Range.time;
+    total_gsec_time : Range.time;
+    total_mut_time : Range.time;
+  }
+
+val print_proc_stats : Format.formatter -> proc_stats -> unit
+
+val processor_statistics : proc:int -> t -> proc_stats
+
+type stats =
+  {
+    real_exec_time : Range.time;
+    user_exec_time : Range.time;
+    user_gc_time : Range.time;
+    user_mut_time : Range.time;
+    per_proc_stats : proc_stats list;
+  }
+
+val statistics : t -> stats
+
+val print_stats : Format.formatter -> stats -> unit

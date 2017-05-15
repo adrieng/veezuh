@@ -2,60 +2,81 @@ include Sqlite3
 
 let debug = ref false
 
-type 'a sqlty =
-  | Int : int sqlty
-  | Real : float sqlty
-  | Text : string sqlty
-  | Pair : 'a sqlty * 'b sqlty -> ('a * 'b) sqlty
+type 'a sql_col_notnull_ty =
+  | Int : int sql_col_notnull_ty
+  | Real : float sql_col_notnull_ty
+  | Text : string sql_col_notnull_ty
 
-let parse ty (arr : string array) =
-  let rec walk : type a. a sqlty -> int -> a * int =
-  fun ty next ->
-  let get () =
-    if next >= Array.length arr
-    then
-      invalid_arg
-        (Printf.sprintf "parse: trying to access index %d of array of length %d"
-           next (Array.length arr))
-    else
-      arr.(next)
-  in
+type 'a sql_col_ty =
+  | Not_null : 'a sql_col_notnull_ty -> 'a sql_col_ty
+  | Nullable : 'a sql_col_notnull_ty -> 'a option sql_col_ty
+
+type 'a sql_row_ty =
+  | Row_single : 'a sql_col_ty -> 'a sql_row_ty
+  | Row_cons : 'a sql_col_ty * 'b sql_row_ty -> ('a * 'b) sql_row_ty
+
+let text =
+ Row_single (Not_null Text)
+
+let int_ =
+ Row_single (Not_null Int)
+
+let real =
+ Row_single (Not_null Real)
+
+let realo =
+ Row_single (Nullable Real)
+
+let real2 =
+ Row_cons (Not_null Real, Row_single (Not_null Real))
+
+exception Ill_typed
+
+let parse_col_notnull : type a. a sql_col_notnull_ty -> string -> a =
+  fun ty s ->
   match ty with
   | Int ->
-     int_of_string (get ()),
-     next + 1
+     int_of_string s
   | Real ->
-     float_of_string (get ()),
-     next + 1
+     float_of_string s
   | Text ->
-     arr.(next),
-     next + 1
-  | Pair (ty1, ty2) ->
-     let r1, next = walk ty1 next in
-     let r2, next = walk ty2 next in
-     (r1, r2), next
+     s
+
+let parse_col : type a. a sql_col_ty -> string option -> a =
+  fun ty so ->
+  match ty, so with
+  | Not_null _, None ->
+     raise Ill_typed
+  | Not_null ty, Some s ->
+     parse_col_notnull ty s
+  | Nullable ty, None ->
+     None
+  | Nullable ty, Some s ->
+     Some (parse_col_notnull ty s)
+
+let parse_row ty (arr : string option array) =
+  let rec walk : type a. a sql_row_ty -> int -> a =
+  fun ty_row next ->
+  match ty_row with
+  | Row_single ty_col ->
+     parse_col ty_col arr.(next)
+  | Row_cons (ty_col, ty_row) ->
+     let a = parse_col ty_col arr.(next) in
+     let b = walk ty_row (next + 1) in
+     (a, b)
   in
+  walk ty 0
 
-  let r, next = walk ty 0 in
-  if next <> Array.length arr
-  then
-    invalid_arg
-      (Printf.sprintf "parse: expected %d fields, got %d fields"
-        next
-        (Array.length arr))
-  ;
-  r
-
-let results : type a. db -> a sqlty -> string -> a list =
+let results : type a. db -> a sql_row_ty -> string -> a list =
   fun db ty req ->
   let r = ref [] in
   let cb s = r := s :: !r in
   if !debug then Format.eprintf "Executing request:@\n %s@." req;
-  let res = exec_not_null_no_headers db ~cb req in
+  let res = exec_no_headers db ~cb req in
   if !debug then Format.eprintf "Done.@.";
   match res with
   | Rc.OK ->
-     List.rev_map (parse ty) !r
+     List.rev_map (parse_row ty) !r
   | err ->
      Format.eprintf "SQLite error %s executing@\n %s@."
        (Rc.to_string err)

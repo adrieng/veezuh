@@ -1,5 +1,9 @@
 type time = float
 
+let print_time fmt t =
+  let m, u = Utils.find_good_unit_scaling t in
+  Format.fprintf fmt "%.2f %s" (t *. m) u
+
 type span = { l : time; u : time; }
 
 let print_span fmt { l; u; } =
