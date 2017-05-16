@@ -18,13 +18,13 @@ prepare: all
 	parallel --will-cite $(BIN) -reprep ::: datasets/*.sqlite
 
 run: all
-	$(BIN) ./datasets/fib.32.4proc.std.sqlite
+	$(BIN) ~/tmp/datasets/fib.32.4proc.std.sqlite
 
 runbig: all
-	$(BIN) ./datasets/fib.32.4proc.hugemem.sqlite
+	$(BIN) ~/tmp/datasets/fib.32.4proc.hugemem.sqlite
 
 runall: all
-	$(BIN) ./datasets/*.sqlite
+	$(BIN) ~/tmp/datasets/*.sqlite
 
 stats: all
-	$(BIN) -stats ./datasets/fib.32.4proc.std.sqlite
+	$(BIN) -stats ~/tmp/datasets/fib.32.4proc.std.sqlite
