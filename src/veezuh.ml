@@ -27,7 +27,7 @@ let build_heap_keys trace =
     let kind =
       Timeline.Signal
         {
-          Timeline.max = Trace.max_occupancy trace;
+          Timeline.max = float @@ Trace.max_heap_size trace;
           Timeline.samples = Trace.occupancy_between trace ();
           Timeline.alpha_mult = 0.1;
         }

@@ -11,12 +11,18 @@ let time_call f =
 
 let find_good_unit_scaling t =
   let rec find t p =
-    if p >= 3 then t, p
+    if abs p >= 3 then t, p
     else if t < 0.01 then find (t *. 1000.) (p + 1)
+    else if t >= 1000. then find (t /. 1000.) (p - 1)
     else t, p
   in
   let _, p = find t 0 in
-  1000. ** float p, List.nth ["s"; "ms"; "us"; "ns"] p
+  1000. ** float p,
+  List.nth ["G"; "M"; "k"; ""; "m"; "u"; "n"] (p + 3)
+
+let print_size fmt t =
+  let m, p = find_good_unit_scaling @@ float t in
+  Format.fprintf fmt "%.2f %sb" (m *. float t) p
 
 let get_opt o =
   match o with

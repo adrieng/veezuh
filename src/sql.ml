@@ -21,6 +21,9 @@ let text =
 let int_ =
  Row_single (Not_null Int)
 
+let into =
+ Row_single (Nullable Int)
+
 let real =
  Row_single (Not_null Real)
 

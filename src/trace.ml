@@ -229,12 +229,29 @@ let events_between { db; procs; } ~between ~proc ~kind () =
   in
   results db real req
 
-let max_occupancy { db; _ } =
-  try
-    let req = "SELECT max(arg1) FROM events WHERE kind = \"HEAP_OCCUPANCY\";" in
-    result db real req
-  with _ ->
-    0.
+let max_heap_size { db; _ } =
+  let req =
+    "SELECT max(arg1)
+     FROM events
+     WHERE kind = \"HEAP_OCCUPANCY\";"
+  in
+  match result db into req with
+  | None ->
+     0
+  | Some i ->
+     i
+
+let max_heap_occupancy { db; _ } =
+  let req =
+    "SELECT max(arg2)
+     FROM events
+     WHERE kind = \"HEAP_OCCUPANCY\";"
+  in
+  match result db into req with
+  | None ->
+     0
+  | Some i ->
+     i
 
 let occupancy_between { db; _ } ~between ~granularity () =
   (* granularity ignored for now *)
@@ -485,6 +502,8 @@ type stats =
     user_exec_time : Range.time;
     user_gc_time : Range.time;
     user_mut_time : Range.time;
+    max_heap_occupancy : int;
+    max_heap_size : int;
     per_proc_stats : proc_stats list;
   }
 
@@ -495,6 +514,8 @@ let print_stats
         user_exec_time;
         user_gc_time;
         user_mut_time;
+        max_heap_occupancy;
+        max_heap_size;
         per_proc_stats;
       } =
   let print_proc_i i pstats =
@@ -513,6 +534,10 @@ let print_stats
   Format.fprintf fmt "USER MUT TIME: %a (%.2f%%)@\n"
     Range.print_time user_mut_time
     (user_mut_time /. user_exec_time *. 100.);
+  Format.fprintf fmt "HEAP OCCUPANCY: %a / %a (%.2f%%)@\n"
+    Utils.print_size max_heap_occupancy
+    Utils.print_size max_heap_size
+    (float max_heap_occupancy /. float max_heap_size *. 100.);
   List.iteri print_proc_i per_proc_stats;
   ()
 
@@ -549,10 +574,15 @@ let statistics trace =
     List.map (fun pstats -> pstats.total_mut_time) per_proc_stats |> Utils.sum
   in
 
+  let max_heap_occupancy = max_heap_occupancy trace in
+  let max_heap_size = max_heap_size trace in
+
   {
     real_exec_time;
     user_exec_time;
     user_gc_time;
     user_mut_time;
+    max_heap_occupancy;
+    max_heap_size;
     per_proc_stats;
   }

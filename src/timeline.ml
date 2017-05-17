@@ -482,7 +482,7 @@ let draw_scale_bar
   for i = 0 to tl.scale_bar_number_of_increments - 1 do
     let x = position_of_increment tl i in
     let t = global_time_of_drawing_pos tl x *. t_scale in
-    let label = Printf.sprintf "%.2f %s" t pref in
+    let label = Printf.sprintf "%.2f %ss" t pref in
     (* Draw the small increment bar *)
     draw_increment ~label x;
   done;
