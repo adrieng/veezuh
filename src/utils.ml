@@ -20,6 +20,11 @@ let find_good_unit_scaling t =
   1000. ** float p,
   List.nth ["G"; "M"; "k"; ""; "m"; "u"; "n"] (p + 3)
 
+let print_to_string print x =
+  ignore @@ Format.flush_str_formatter ();
+  Format.fprintf Format.str_formatter "%a@?" print x;
+  Format.flush_str_formatter ()
+
 let print_size fmt t =
   let m, p = find_good_unit_scaling @@ float t in
   Format.fprintf fmt "%.2f %sb" (m *. float t) p
