@@ -23,12 +23,12 @@ let build_heap_keys trace =
       ~visible:true
   in
 
-  let occupancy =
+  let chunkp_occupancy =
     let kind =
       Timeline.Signal
         {
           Timeline.max = float @@ Trace.max_chunkp_size trace;
-          Timeline.samples = Trace.occupancy_between trace ();
+          Timeline.samples = Trace.chunkp_occupancy_between trace ();
           Timeline.alpha_mult = 0.1;
         }
     in
@@ -39,7 +39,41 @@ let build_heap_keys trace =
       ~visible:true
   in
 
-  Timeline.row_add_key heap occupancy;
+  let heap_occupancy =
+    let kind =
+      Timeline.Signal
+        {
+          Timeline.max = float @@ Trace.max_heap_size trace;
+          Timeline.samples = Trace.heap_occupancy_between trace ();
+          Timeline.alpha_mult = 0.1;
+        }
+    in
+    Timeline.make_key
+      ~name:"Heap Occupancy"
+      ~kind
+      ~color:(0.604, 0.804, 0.196, 1.)
+      ~visible:false
+  in
+
+  let heap_size =
+    let kind =
+      Timeline.Signal
+        {
+          Timeline.max = float @@ Trace.max_heap_size trace;
+          Timeline.samples = Trace.heap_size_between trace ();
+          Timeline.alpha_mult = 0.1;
+        }
+    in
+    Timeline.make_key
+      ~name:"Heap Size"
+      ~kind
+      ~color:(0.596, 0.984, 0.596, 1.)
+      ~visible:false
+  in
+
+  Timeline.row_add_key heap heap_size;
+  Timeline.row_add_key heap heap_occupancy;
+  Timeline.row_add_key heap chunkp_occupancy;
 
   heap
 
@@ -158,11 +192,6 @@ let build_keys_for_processor trace ~proc =
         ~name:"Thread Copy"
         ~kind:(Event (get_events "THREAD_COPY"))
         ~color:(0.196, 0.804, 0.196, 1.)
-        ~visible:false;
-      make_key
-        ~name:"GC Abort"
-        ~kind:(Event (get_events "GC_ABORT"))
-        ~color:(0.502, 0.000, 0.502, 1.)
         ~visible:false;
       make_key
         ~name:"Halt Request"

@@ -229,6 +229,66 @@ let events_between { db; procs; } ~between ~proc ~kind () =
   in
   results db real req
 
+let max_heap_size { db; _ } =
+  let req =
+    "SELECT max(arg1)
+     FROM events
+     WHERE kind = \"HEAP_OCCUPANCY\";"
+  in
+  match result db into req with
+  | None ->
+     0
+  | Some i ->
+     i
+
+let heap_size_between { db; _ } ~between ~granularity () =
+  let { Range.l; Range.u; } = between in
+  let req =
+    Printf.sprintf
+      "SELECT max(time), max(arg1)
+       FROM events
+       WHERE kind = 'HEAP_OCCUPANCY'
+       AND %f <= time AND time <= %f
+       GROUP BY CAST (time / %f AS INTEGER)
+       HAVING %f <= time AND time <= %f;"
+      l
+      u
+      granularity
+      l
+      u
+  in
+  results db real2 req
+
+let max_heap_occupancy { db; _ } =
+  let req =
+    "SELECT max(arg2)
+     FROM events
+     WHERE kind = \"HEAP_OCCUPANCY\";"
+  in
+  match result db into req with
+  | None ->
+     0
+  | Some i ->
+     i
+
+let heap_occupancy_between { db; _ } ~between ~granularity () =
+  let { Range.l; Range.u; } = between in
+  let req =
+    Printf.sprintf
+      "SELECT max(time), max(arg2)
+       FROM events
+       WHERE kind = 'HEAP_OCCUPANCY'
+       AND %f <= time AND time <= %f
+       GROUP BY CAST (time / %f AS INTEGER)
+       HAVING %f <= time AND time <= %f;"
+      l
+      u
+      granularity
+      l
+      u
+  in
+  results db real2 req
+
 let max_chunkp_size { db; _ } =
   let req =
     "SELECT max(arg1)
@@ -253,7 +313,7 @@ let max_chunkp_occupancy { db; _ } =
   | Some i ->
      i
 
-let occupancy_between { db; _ } ~between ~granularity () =
+let chunkp_occupancy_between { db; _ } ~between ~granularity () =
   let { Range.l; Range.u; } = between in
   let req =
     Printf.sprintf

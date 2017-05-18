@@ -29,6 +29,28 @@ val events_between :
   unit ->
   float list
 
+val max_heap_size :
+  t ->
+  int
+
+val heap_size_between :
+  t ->
+  between:Range.span ->
+  granularity:float ->
+  unit ->
+  (float * float) list
+
+val max_heap_occupancy :
+  t ->
+  int
+
+val heap_occupancy_between :
+  t ->
+  between:Range.span ->
+  granularity:float ->
+  unit ->
+  (float * float) list
+
 val max_chunkp_size :
   t ->
   int
@@ -37,7 +59,7 @@ val max_chunkp_occupancy :
   t ->
   int
 
-val occupancy_between :
+val chunkp_occupancy_between :
   t ->
   between:Range.span ->
   granularity:float ->
