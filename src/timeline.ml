@@ -359,18 +359,25 @@ let increment_epoch_at_x tl x =
 let selection_reset tl =
   tl.current_selection <- None
 
-let selection_discrete tl t =
-  tl.current_selection <- Some { l = t; u = t; }
-
-let selection_epoch tl ep =
+let selection_set tl ep =
   tl.current_selection <- Some ep
+
+let selection_discrete tl t =
+  tl.current_selection <- Some (Range.discrete t)
+
+let selection_enlarge tl ep =
+  match tl.current_selection with
+  | None ->
+     selection_set tl ep
+  | Some ep' ->
+     selection_set tl (Range.union ep ep')
 
 let selection_right_side tl u =
   match tl.current_selection with
   | None ->
-     selection_discrete tl u
+     selection_set tl (Range.discrete u)
   | Some { l; _ } ->
-     tl.current_selection <- Some { l; u; }
+     selection_set tl { l; u; }
 
 (* Low-level Gtk+ stuff *)
 
@@ -658,7 +665,7 @@ let draw_timeline tl cr =
 (* High-level actions *)
 
 let change_current_epoch ~epoch tl =
-  tl.current_epoch <- Range.clip ~within:tl.global_epoch epoch;
+  tl.current_epoch <- Range.intersection tl.global_epoch epoch;
   redraw ~dirty:true ~scrollbars:true tl
 
 let zoom ~x ~factor tl =
@@ -695,8 +702,7 @@ let click tl pressed e =
     end;
   if button = 3 && pressed then
     begin
-      tl.current_selection <- Some (increment_epoch_at_x tl x);
-      tl.selection_in_progress <- false;
+      selection_enlarge tl @@ increment_epoch_at_x tl x;
       redraw tl;
     end;
   false

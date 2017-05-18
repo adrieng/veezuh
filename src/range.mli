@@ -8,8 +8,12 @@ val print_span : Format.formatter -> span -> unit
 
 val truncate : span -> time -> time
 
-val clip : within:span -> span -> span
-
 val range : span -> time
 
 val canonicalize : span -> span
+
+val discrete : time -> span
+
+val union : span -> span -> span
+
+val intersection : span -> span -> span
