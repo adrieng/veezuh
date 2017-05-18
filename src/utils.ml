@@ -56,14 +56,17 @@ let print_array print fmt arr =
 let print_string_array =
   print_array print_string
 
-module SSet =
-  Set.Make
-    (
-      struct
-        type t = string
-        let compare = Pervasives.compare
-      end
-    )
+module HashedString =
+  struct
+    type t = string
+    let compare (s1 : t) (s2 : t) = Pervasives.compare s1 s2
+    let hash (s : t) = Hashtbl.hash s
+    let equal s1 s2 = 0 = compare s1 s2
+  end
+
+module SSet = Set.Make(HashedString)
+module SHashTable = Hashtbl.Make(HashedString)
+module SWeakTable = Ephemeron.K1.Make(HashedString)
 
 (* Math stuff *)
 

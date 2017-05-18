@@ -40,7 +40,7 @@ let cached_activities =
 let purge trace =
   let keep = [ "events" ] in
   let drop s =
-    exec_check
+    execute
       trace.db
       (Printf.sprintf "DROP TABLE %s;" s)
   in
@@ -66,7 +66,7 @@ let create_activity_cache trace ~name ~enter ~leave =
        );"
       table
   in
-  exec_check trace.db create_req;
+  execute trace.db create_req;
   (* Create two temporary tables for labeling. *)
   let create_temp ~name ~kind =
     let req =
@@ -86,7 +86,7 @@ let create_activity_cache trace ~name ~enter ~leave =
         name
         kind
     in
-    exec_check trace.db req
+    execute trace.db req
   in
   create_temp ~name:"tmp1" ~kind:enter;
   create_temp ~name:"tmp2" ~kind:leave;
@@ -99,8 +99,8 @@ let create_activity_cache trace ~name ~enter ~leave =
        WHERE e.id = l.id;"
       table
   in
-  exec_check trace.db merge_req;
-  exec_check trace.db "DROP TABLE tmp1; DROP TABLE tmp2;";
+  execute trace.db merge_req;
+  execute trace.db "DROP TABLE tmp1; DROP TABLE tmp2;";
   trace.caches <- (name, table) :: trace.caches;
   table
 

@@ -1,27 +1,65 @@
 open Sqlite3
+module Table = Utils.SHashTable
 
 (* {2 Basic types and functions} *)
 
-type t = Sqlite3.db
-
 type req = string
 
+type raw_results = string option array list
+
+type t =
+  {
+    db : Sqlite3.db;
+    cache : raw_results Table.t;
+  }
+
 let open_file ~filename =
-  db_open ~mode:`NO_CREATE filename
+  let db = db_open ~mode:`NO_CREATE filename in
+  let cache = Table.create 100 in
+  {
+    db;
+    cache;
+  }
 
 (* {2 Low-level facilities} *)
 
 let debug = ref false
 
-let exec_check db req =
-  if !debug then Format.eprintf "Executing request:@\n %s@." req;
-  let res = exec db req in
+let exec ~cb db req =
+  if !debug then Format.eprintf "Executing @\n %s@." req;
+  let res = Sqlite3.exec_no_headers ~cb db.db req in
   if !debug then Format.eprintf "Done@.";
   match res with
   | Rc.OK ->
      ()
   | err ->
-     failwith @@ "exec_check: " ^ Rc.to_string err
+     failwith @@ "Error: " ^ Rc.to_string err
+
+let query ?(cached = true) ?(inverted = false) db req =
+  let do_query () =
+    let r = ref [] in
+    let cb s = r := s :: !r in
+    exec ~cb db req;
+    if inverted then !r else List.rev !r
+  in
+  if cached
+  then
+    begin
+    try
+      let res = Table.find db.cache req in
+      if !debug then Format.eprintf "Found result in cache for@\n %s@." req;
+      res
+    with Not_found ->
+      if !debug then Format.eprintf "No result in cache for@\n %s@." req;
+      let res = do_query () in
+      Table.add db.cache req res;
+      res
+    end
+  else
+    do_query ()
+
+let execute db req =
+  exec (fun _ -> ()) db req
 
 (* {2 High-level facilities} *)
 
@@ -37,24 +75,6 @@ type 'a sql_col_ty =
 type 'a sql_row_ty =
   | Row_single : 'a sql_col_ty -> 'a sql_row_ty
   | Row_cons : 'a sql_col_ty * 'b sql_row_ty -> ('a * 'b) sql_row_ty
-
-let text =
- Row_single (Not_null Text)
-
-let int_ =
- Row_single (Not_null Int)
-
-let into =
- Row_single (Nullable Int)
-
-let real =
- Row_single (Not_null Real)
-
-let realo =
- Row_single (Nullable Real)
-
-let real2 =
- Row_cons (Not_null Real, Row_single (Not_null Real))
 
 exception Ill_typed
 
@@ -93,26 +113,34 @@ let parse_row ty (arr : string option array) =
   in
   walk ty 0
 
-let results : type a. db -> a sql_row_ty -> string -> a list =
+let results : type a. t -> a sql_row_ty -> string -> a list =
   fun db ty req ->
-  let r = ref [] in
-  let cb s = r := s :: !r in
-  if !debug then Format.eprintf "Executing request:@\n %s@." req;
-  let res = exec_no_headers db ~cb req in
-  if !debug then Format.eprintf "Done.@.";
-  match res with
-  | Rc.OK ->
-     List.rev_map (parse_row ty) !r
-  | err ->
-     Format.eprintf "SQLite error %s executing@\n %s@."
-       (Rc.to_string err)
-       req;
-     []
-  | exception exn ->
-     Format.eprintf "Exception %s executing@\n %s@."
-       (Printexc.to_string exn)
-       req;
-     []
+  let res = query ~cached:true ~inverted:true db req in
+  List.rev_map (parse_row ty) res
 
 let result db ty req =
-  List.hd @@ results db ty req
+  match results db ty req with
+  | [] ->
+     raise Ill_typed
+  | x :: _ ->
+     x
+
+(* {2 Convenience values} *)
+
+let text =
+ Row_single (Not_null Text)
+
+let int_ =
+ Row_single (Not_null Int)
+
+let into =
+ Row_single (Nullable Int)
+
+let real =
+ Row_single (Not_null Real)
+
+let realo =
+ Row_single (Nullable Real)
+
+let real2 =
+ Row_cons (Not_null Real, Row_single (Not_null Real))

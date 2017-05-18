@@ -1,8 +1,10 @@
 (* {2 Basic types and functions} *)
 
-type t
-
 type req = string
+
+type raw_results = string option array list
+
+type t
 
 val open_file : filename:string -> t
 
@@ -10,7 +12,9 @@ val open_file : filename:string -> t
 
 val debug : bool ref
 
-val exec_check : t -> req -> unit
+val query : ?cached:bool -> ?inverted:bool -> t -> req -> raw_results
+
+val execute : t -> req -> unit
 
 (* {2 High-level facilities} *)
 
