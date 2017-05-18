@@ -323,6 +323,8 @@ let iter_rows_between f tl ~ymin ~ymax =
            f ~y:yview ~h r;
            let yview' = yview + h + tl.chart_vertical_spacing in
            iter ~ychart:ychart' ~yview:yview' rows
+       else
+         iter ~ychart ~yview rows
   in
   iter 0 (chart_top tl) tl.rows
 
