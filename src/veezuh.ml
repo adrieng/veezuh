@@ -27,13 +27,13 @@ let build_heap_keys trace =
     let kind =
       Timeline.Signal
         {
-          Timeline.max = float @@ Trace.max_heap_size trace;
+          Timeline.max = float @@ Trace.max_chunkp_size trace;
           Timeline.samples = Trace.occupancy_between trace ();
           Timeline.alpha_mult = 0.1;
         }
     in
     Timeline.make_key
-      ~name:"Occupancy"
+      ~name:"Chunk Pool Occupancy"
       ~kind
       ~color:(0.486, 1.988, 0.000, 1.)
       ~visible:true
@@ -398,7 +398,7 @@ let build_key_pane trace ~packing () =
     GBin.scrolled_window
       ~hpolicy:`AUTOMATIC
       ~vpolicy:`ALWAYS
-      ~width:265
+      ~width:270
       ~packing
       ()
   in

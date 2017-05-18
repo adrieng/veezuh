@@ -29,11 +29,11 @@ val events_between :
   unit ->
   float list
 
-val max_heap_size :
+val max_chunkp_size :
   t ->
   int
 
-val max_heap_occupancy :
+val max_chunkp_occupancy :
   t ->
   int
 
@@ -111,8 +111,8 @@ type stats =
     user_exec_time : Range.time;
     user_gc_time : Range.time;
     user_mut_time : Range.time;
-    max_heap_occupancy : int;
-    max_heap_size : int;
+    max_chunkp_occupancy : int;
+    max_chunkp_size : int;
     per_proc_stats : proc_stats list;
   }
 

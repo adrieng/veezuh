@@ -229,11 +229,11 @@ let events_between { db; procs; } ~between ~proc ~kind () =
   in
   results db real req
 
-let max_heap_size { db; _ } =
+let max_chunkp_size { db; _ } =
   let req =
     "SELECT max(arg1)
      FROM events
-     WHERE kind = \"HEAP_OCCUPANCY\";"
+     WHERE kind = \"CHUNKP_OCCUPANCY\";"
   in
   match result db into req with
   | None ->
@@ -241,11 +241,11 @@ let max_heap_size { db; _ } =
   | Some i ->
      i
 
-let max_heap_occupancy { db; _ } =
+let max_chunkp_occupancy { db; _ } =
   let req =
     "SELECT max(arg2)
      FROM events
-     WHERE kind = \"HEAP_OCCUPANCY\";"
+     WHERE kind = \"CHUNKP_OCCUPANCY\";"
   in
   match result db into req with
   | None ->
@@ -259,7 +259,7 @@ let occupancy_between { db; _ } ~between ~granularity () =
     Printf.sprintf
       "SELECT max(time), max(arg2)
        FROM events
-       WHERE kind = 'HEAP_OCCUPANCY'
+       WHERE kind = 'CHUNKP_OCCUPANCY'
        AND %f <= time AND time <= %f
        GROUP BY CAST (time / %f AS INTEGER)
        HAVING %f <= time AND time <= %f;"
@@ -277,7 +277,7 @@ let max_ratio { db; procs } ~proc =
       Printf.sprintf
         "SELECT max(arg1/arg2)
          FROM events
-         WHERE kind = \"HEAP_RATIO\" AND argptr = %d AND arg2 > 0;"
+         WHERE kind = 'CHUNKP_RATIO' AND argptr = %d AND arg2 > 0;"
         procs.(proc)
     in
     result db real req
@@ -289,7 +289,7 @@ let ratio_between { db; procs } ~between ~proc ~granularity () =
     Printf.sprintf
       "SELECT max(time), max(arg1/arg2)
        FROM events
-       WHERE kind = 'HEAP_RATIO'
+       WHERE kind = 'CHUNKP_RATIO'
        AND %f <= time AND time <= %f
        AND argptr = %d and arg2 > 0
        GROUP BY CAST (time / %f AS INTEGER)
@@ -309,7 +309,7 @@ let max_locally_collectible { db; procs; } ~proc () =
       Printf.sprintf
         "SELECT max(arg2)
          FROM events
-         WHERE kind = \"HEAP_RATIO\" AND argptr = %d;"
+         WHERE kind = 'CHUNKP_RATIO' AND argptr = %d;"
         procs.(proc)
     in
     result db real req
@@ -512,8 +512,8 @@ type stats =
     user_exec_time : Range.time;
     user_gc_time : Range.time;
     user_mut_time : Range.time;
-    max_heap_occupancy : int;
-    max_heap_size : int;
+    max_chunkp_occupancy : int;
+    max_chunkp_size : int;
     per_proc_stats : proc_stats list;
   }
 
@@ -524,8 +524,8 @@ let print_stats
         user_exec_time;
         user_gc_time;
         user_mut_time;
-        max_heap_occupancy;
-        max_heap_size;
+        max_chunkp_occupancy;
+        max_chunkp_size;
         per_proc_stats;
       } =
   let print_proc_i i pstats =
@@ -544,10 +544,10 @@ let print_stats
   Format.fprintf fmt "USER MUT TIME: %a (%.2f%%)@\n"
     Range.print_time user_mut_time
     (user_mut_time /. user_exec_time *. 100.);
-  Format.fprintf fmt "HEAP OCCUPANCY: %a / %a (%.2f%%)@\n"
-    Utils.print_size max_heap_occupancy
-    Utils.print_size max_heap_size
-    (float max_heap_occupancy /. float max_heap_size *. 100.);
+  Format.fprintf fmt "CHUNKPOOL OCCUPANCY: %a / %a (%.2f%%)@\n"
+    Utils.print_size max_chunkp_occupancy
+    Utils.print_size max_chunkp_size
+    (float max_chunkp_occupancy /. float max_chunkp_size *. 100.);
   List.iteri print_proc_i per_proc_stats;
   ()
 
@@ -584,15 +584,15 @@ let statistics trace =
     List.map (fun pstats -> pstats.total_mut_time) per_proc_stats |> Utils.sum
   in
 
-  let max_heap_occupancy = max_heap_occupancy trace in
-  let max_heap_size = max_heap_size trace in
+  let max_chunkp_occupancy = max_chunkp_occupancy trace in
+  let max_chunkp_size = max_chunkp_size trace in
 
   {
     real_exec_time;
     user_exec_time;
     user_gc_time;
     user_mut_time;
-    max_heap_occupancy;
-    max_heap_size;
+    max_chunkp_occupancy;
+    max_chunkp_size;
     per_proc_stats;
   }
