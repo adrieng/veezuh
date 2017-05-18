@@ -289,6 +289,12 @@ let chart_pos_of_drawing_pos tl x =
   in
   x -. chart_left_f tl
 
+let increment_epoch tl i =
+  let tpi = time_per_increment tl in
+  let l = tl.current_epoch.l +. tpi *. float i in
+  let u = l +. tpi in
+  { l; u; }
+
 (* Derived graphical parameters *)
 
 let total_chart_height tl =
@@ -343,6 +349,11 @@ let truncate_pos_to_chart tl x =
     { l = float (chart_left tl); u = float (chart_right tl); }
     x
 
+let increment_epoch_at_x tl x =
+  let xchart = int_of_float @@ truncate_pos_to_chart tl x -. chart_left_f tl in
+  let ppi = int_of_float @@ pixels_per_increment tl in
+  increment_epoch tl (xchart / ppi)
+
 (* Selection-related things *)
 
 let selection_reset tl =
@@ -350,6 +361,9 @@ let selection_reset tl =
 
 let selection_discrete tl t =
   tl.current_selection <- Some { l = t; u = t; }
+
+let selection_epoch tl ep =
+  tl.current_selection <- Some ep
 
 let selection_right_side tl u =
   match tl.current_selection with
@@ -677,6 +691,12 @@ let click tl pressed e =
     begin
       if pressed then selection_discrete tl t;
       tl.selection_in_progress <- pressed;
+      redraw tl;
+    end;
+  if button = 3 && pressed then
+    begin
+      tl.current_selection <- Some (increment_epoch_at_x tl x);
+      tl.selection_in_progress <- false;
       redraw tl;
     end;
   false
