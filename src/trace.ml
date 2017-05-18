@@ -2,7 +2,7 @@ open Sql
 
 type t =
   {
-    db : db;
+    db : Sql.t;
     procs : int array;
     mutable caches : (string * string) list;
   }
@@ -146,7 +146,7 @@ let processor_ids db =
 (* Exposed functions *)
 
 let from_sqlite_file filename =
-  let db = db_open ~mode:`NO_CREATE filename in
+  let db = Sql.open_file ~filename in
   let tables = tables db in
 
   (* Check that the event table is here *)

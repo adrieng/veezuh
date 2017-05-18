@@ -1,6 +1,29 @@
-include Sqlite3
+open Sqlite3
+
+(* {2 Basic types and functions} *)
+
+type t = Sqlite3.db
+
+type req = string
+
+let open_file ~filename =
+  db_open ~mode:`NO_CREATE filename
+
+(* {2 Low-level facilities} *)
 
 let debug = ref false
+
+let exec_check db req =
+  if !debug then Format.eprintf "Executing request:@\n %s@." req;
+  let res = exec db req in
+  if !debug then Format.eprintf "Done@.";
+  match res with
+  | Rc.OK ->
+     ()
+  | err ->
+     failwith @@ "exec_check: " ^ Rc.to_string err
+
+(* {2 High-level facilities} *)
 
 type 'a sql_col_notnull_ty =
   | Int : int sql_col_notnull_ty
@@ -93,13 +116,3 @@ let results : type a. db -> a sql_row_ty -> string -> a list =
 
 let result db ty req =
   List.hd @@ results db ty req
-
-let exec_check db req =
-  if !debug then Format.eprintf "Executing request:@\n %s@." req;
-  let res = exec db req in
-  if !debug then Format.eprintf "Done@.";
-  match res with
-  | Rc.OK ->
-     ()
-  | err ->
-     failwith @@ "exec_check: " ^ Rc.to_string err
