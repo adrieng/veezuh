@@ -187,7 +187,12 @@ let build_keys_for_processor trace ~proc =
         ~name:"Initialization"
         ~kind:(Event (get_events "INIT"))
         ~color:(0.498, 1.000, 0.831, 1.)
-        ~visible:false;
+        ~visible:true;
+      make_key
+        ~name:"Launch"
+        ~kind:(Event (get_events "LAUNCH"))
+        ~color:(0.780, 0.082, 0.522, 1.)
+        ~visible:true;
       make_key
         ~name:"Thread Copy"
         ~kind:(Event (get_events "THREAD_COPY"))
@@ -354,7 +359,7 @@ let add_global_model_row_from_tl_rows info rows =
     match Timeline.get_key_name key with
     | "GC" | "Runtime"
     | "Thread Copy"
-    | "Initialization" | "Halt Request" | "Halt Ack"
+    | "Initialization" | "Launch" | "Halt Request" | "Halt Ack"
       ->
        global_row
 
