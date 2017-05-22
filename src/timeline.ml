@@ -525,21 +525,35 @@ let draw_key ~y ~h tl cr (key : key) =
 
          let ymax = y +. h in
          let yr = { l = y +. 1.; u = ymax -. 1.; } in
+         let drawing_pos_of_value v =
+           Range.truncate yr (ymax -. v /. vmax *. h)
+         in
 
          Cairo.set_line_join cr Cairo.JOIN_ROUND;
          Cairo.set_line_width cr 2.;
 
          (* Start the mask at the bottom-right of the proc chart *)
 
+         (* Initial x position *)
          let lx = ref (chart_left_f tl) in
-         let ly = ref ymax in
+         (* Initial y position *)
+         let ly =
+           (* We only start at y = 0 if there is no sample at x = 0. *)
+           match samples with
+           | [] ->
+              ref ymax
+           | (t, v) :: _ ->
+              let l' = floor @@ drawing_pos_of_time tl t in
+              ref (if l' > chart_left_f tl
+                   then ymax
+                   else drawing_pos_of_value v)
+         in
          Cairo.move_to cr ~x:!lx ~y:!ly;
 
          (* Add each sample to the mask *)
          let draw_sample (t, v) =
            let x = drawing_pos_of_time tl t in
-           let y = ymax -. v /. vmax *. h in
-           let y = Range.truncate yr y in
+           let y = drawing_pos_of_value v in
            if ceil y <> ceil !ly
            then
              begin
