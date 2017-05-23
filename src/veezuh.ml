@@ -180,7 +180,7 @@ let build_keys_for_processor trace ~proc =
                  (get_activites
                     ~name:"Runtime"
                     ~enter:"RUNTIME_ENTER"
-                    ~leave:"RUNTME_LEAVE"))
+                    ~leave:"RUNTIME_LEAVE"))
         ~color:(0.373, 0.620, 0.627, 0.75)
         ~visible:false;
       make_key
