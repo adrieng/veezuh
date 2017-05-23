@@ -19,7 +19,7 @@ let build_heap_keys trace =
       ~name:"Heap"
       ~rank:0
       ~height:150
-      ~background:Utils.transparent
+      ~background:Utils.light_background
       ~visible:true
   in
 

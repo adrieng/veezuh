@@ -93,6 +93,9 @@ let transparent = 1., 1., 1., 0.
 let grey_background =
   0.05, 0.05, 0.05, 0.12
 
+let light_background =
+  0.05, 0.05, 0.05, 0.05
+
 let set_rgba cr (r, g, b, a) =
   Cairo.set_source_rgba cr ~r ~g ~b ~a
 
