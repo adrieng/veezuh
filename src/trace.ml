@@ -35,6 +35,7 @@ let cached_activities =
     "GSectionWork", "GSECTION_BEGIN_LEAVE", "GSECTION_END_ENTER";
     "GSectionEntering", "GSECTION_BEGIN_ENTER", "GSECTION_BEGIN_LEAVE";
     "GSectionLeaving", "GSECTION_END_ENTER", "GSECTION_END_LEAVE";
+    "ArrayAllocate", "ARRAY_ALLOCATE_ENTER", "ARRAY_ALLOCATE_LEAVE";
   ]
 
 let purge trace =

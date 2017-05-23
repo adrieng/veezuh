@@ -235,6 +235,16 @@ let build_keys_for_processor trace ~proc =
                     ~leave:"LOCK_RELEASE"))
         ~color:(0.863, 0.078, 0.235, 0.6)
         ~visible:false;
+      make_key
+        ~name:"Array Allocation"
+        ~kind:(Activity
+                 (get_activites
+                    ~name:"ArrayAllocate"
+                    ~enter:"ARRAY_ALLOCATE_ENTER"
+                    ~leave:"ARRAY_ALLOCATE_LEAVE"))
+        (* ~color:(1.000, 0.855, 0.725, 0.8) *)
+        ~color:(0.255, 0.412, 0.882, 0.8)
+        ~visible:false;
     ]
   in
 
@@ -360,6 +370,7 @@ let add_global_model_row_from_tl_rows info rows =
     | "GC" | "Runtime"
     | "Thread Copy"
     | "Initialization" | "Launch" | "Halt Request" | "Halt Ack"
+    | "Array Allocation"
       ->
        global_row
 
