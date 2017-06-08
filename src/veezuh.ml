@@ -172,7 +172,7 @@ let build_keys_for_processor trace ~proc =
                     ~name:"GC"
                     ~enter:"GC_ENTER"
                     ~leave:"GC_LEAVE"))
-        ~color:(1.000, 0.271, 0.000, 0.75)
+        ~color:(1.000, 0.843, 0.000, 0.75)
         ~visible:true;
       make_key
         ~name:"Runtime"
@@ -218,22 +218,18 @@ let build_keys_for_processor trace ~proc =
         ~color:(0.729, 0.333, 0.827, 0.6)
         ~visible:false;
       make_key
+        ~name:"Lock Contention"
+        ~kind:(Event (get_events "LOCK_TAKE_ENTER"))
+        ~color:(1.000, 0.000, 0.000, 0.6)
+        ~visible:false;
+      make_key
         ~name:"Lock Taking"
         ~kind:(Activity
                  (get_activites
                     ~name:"LockTaking"
                     ~enter:"LOCK_TAKE_ENTER"
                     ~leave:"LOCK_TAKE_LEAVE"))
-        ~color:(1.000, 0.000, 0.000, 0.6)
-        ~visible:false;
-      make_key
-        ~name:"Lock Holding"
-        ~kind:(Activity
-                 (get_activites
-                    ~name:"LockHolding"
-                    ~enter:"LOCK_TAKE_LEAVE"
-                    ~leave:"LOCK_RELEASE"))
-        ~color:(0.863, 0.078, 0.235, 0.6)
+        ~color:(1.000, 0.271, 0.000, 0.6)
         ~visible:false;
       make_key
         ~name:"Array Allocation"
@@ -374,7 +370,7 @@ let add_global_model_row_from_tl_rows info rows =
       ->
        global_row
 
-    | "Lock Taking" | "Lock Holding"
+    | "Lock Taking" | "Lock Contention"
     | "Global Critical Section"
       ->
        concurrency_row
