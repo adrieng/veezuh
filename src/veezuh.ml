@@ -232,6 +232,40 @@ let build_keys_for_processor trace ~proc =
         ~color:(1.000, 0.271, 0.000, 0.6)
         ~visible:false;
       make_key
+        ~name:"RWLock R Take"
+        ~kind:(Event (get_events "RWLOCK_R_TAKE"))
+        ~color:(1.000, 0.388, 0.278, 1.0)
+        ~visible:false;
+      make_key
+        ~name:"RWLock R Release"
+        ~kind:(Event (get_events "RWLOCK_R_RELEASE"))
+        ~color:(0.804, 0.361, 0.361, 1.0)
+        ~visible:false;
+      make_key
+        ~name:"RWLock W Take"
+        ~kind:(Event (get_events "RWLOCK_W_TAKE"))
+        ~color:(1.000, 0.078, 0.576, 1.0)
+        ~visible:false;
+      make_key
+        ~name:"RWLock W Release"
+        ~kind:(Event (get_events "RWLOCK_W_RELEASE"))
+        ~color:(0.780, 0.082, 0.522, 1.0)
+        ~visible:false;
+      make_key
+        ~name:"Promotion"
+        ~kind:(Event (get_events "PROMOTION_ENTER"))
+        ~color:(0.867, 0.627, 0.867, 1.)
+        ~visible:false;
+      make_key
+        ~name:"Promotion Period"
+        ~kind:(Activity
+                 (get_activites
+                    ~name:"Promotion"
+                    ~enter:"PROMOTION_ENTER"
+                    ~leave:"PROMOTION_LEAVE"))
+        ~color:(0.933, 0.510, 0.933, 0.7)
+        ~visible:false;
+      make_key
         ~name:"Array Allocation"
         ~kind:(Activity
                  (get_activites
@@ -372,6 +406,9 @@ let add_global_model_row_from_tl_rows info rows =
 
     | "Lock Taking" | "Lock Contention"
     | "Global Critical Section"
+    | "RWLock R Take" | "RWLock R Release"
+    | "RWLock W Take" | "RWLock W Release"
+    | "Promotion" | "Promotion Period"
       ->
        concurrency_row
     | "LCHS" | "LCS" | "LCHS/LCS" | "LCHS/LCS control"
