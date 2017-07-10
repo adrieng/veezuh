@@ -16,4 +16,5 @@ depends:
   "cairo2"
 ]
 depopts: []
-build: [["jbuilder" "build" "-p" name "-j" jobs]]
+build: [["jbuilder" "build" "--only-packages" name
+         "--root" "." "-j" jobs "@install"]]

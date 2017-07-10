@@ -3,7 +3,7 @@ BIN=./_build/default/src/veezuh.exe
 .PHONY: all clean uninstall install
 
 all:
-	jbuilder build
+	jbuilder build @install
 
 clean:
 	rm -rf _build
