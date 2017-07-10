@@ -216,7 +216,7 @@ let activities_between
   let res = results trace.db real2 req in
   List.map (fun (l, u) -> Range.{ l; u; }) res
 
-let events_between { db; procs; } ~between ~proc ~kind () =
+let events_between { db; procs; } ~granularity ~between ~proc ~kind () =
   let req =
     Printf.sprintf
       "SELECT time
@@ -227,7 +227,18 @@ let events_between { db; procs; } ~between ~proc ~kind () =
       between.Range.u
       procs.(proc)
   in
-  results db real req
+  let res = results db real req in
+  let rec loop acc prev_t ts =
+    match ts with
+    | [] ->
+       List.rev acc
+    | t :: ts ->
+       assert (t >= prev_t);
+       if t -. prev_t < granularity
+       then loop acc prev_t ts
+       else loop (t :: acc) t ts
+  in
+  loop [] 0. res
 
 let max_heap_size { db; _ } =
   let req =

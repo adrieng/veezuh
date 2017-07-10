@@ -14,6 +14,7 @@ type activity_callback =
   Range.span list
 
 type event_callback =
+  granularity:Range.time ->
   between:Range.span ->
   Range.time list
 
@@ -582,8 +583,9 @@ let draw_key ~y ~h tl cr (key : key) =
          List.iter (draw_epoch ~y ~h tl cr) activities
 
       | Event kevent ->
+         let granularity = time_per_pixel tl in
          let events = kevent.events ~between in
-         List.iter (draw_event ~y ~h tl cr) events
+         List.iter (draw_event ~y ~h tl cr) (events ~granularity)
     end
 
 let draw_row tl cr ~y ~h row =

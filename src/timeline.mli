@@ -11,6 +11,7 @@ type activity_callback =
   Range.span list
 
 type event_callback =
+  granularity:Range.time ->
   between:Range.span ->
   Range.time list
 

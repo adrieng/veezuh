@@ -116,8 +116,16 @@ let build_keys_for_processor trace ~proc =
   in
 
   let get_events kind =
+    let events ~granularity =
+        Trace.events_between
+          trace
+          ~granularity
+          ~proc
+          ~kind
+          ()
+    in
     {
-      Timeline.events = Trace.events_between trace ~proc ~kind ();
+      Timeline.events = events;
     }
   in
   let get_activites ~name ~enter ~leave =
@@ -172,7 +180,7 @@ let build_keys_for_processor trace ~proc =
                     ~name:"GC"
                     ~enter:"GC_ENTER"
                     ~leave:"GC_LEAVE"))
-        ~color:(1.000, 0.843, 0.000, 0.75)
+        ~color:(1.000, 0.647, 0.000, 0.9)
         ~visible:true;
       make_key
         ~name:"Runtime"

@@ -23,6 +23,7 @@ val activities_between :
 
 val events_between :
   t ->
+  granularity:Range.time ->
   between:Range.span ->
   proc:int ->
   kind:string ->
