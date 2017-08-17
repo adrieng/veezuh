@@ -283,6 +283,11 @@ let build_keys_for_processor trace ~proc =
         (* ~color:(1.000, 0.855, 0.725, 0.8) *)
         ~color:(0.255, 0.412, 0.882, 0.8)
         ~visible:false;
+      make_key
+        ~name:"Merged Heap"
+        ~kind:(Event (get_events "MERGED_HEAP"))
+        ~color:(0.184, 0.310, 0.310, 1.0)
+        ~visible:false;
     ]
   in
 
@@ -420,7 +425,7 @@ let add_global_model_row_from_tl_rows info rows =
       ->
        concurrency_row
     | "LCHS" | "LCS" | "LCHS/LCS" | "LCHS/LCS control"
-    | "GC Abort"
+    | "GC Abort" | "Merged Heap"
       ->
        hh_row
     | _ ->
