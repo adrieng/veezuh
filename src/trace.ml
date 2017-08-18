@@ -436,16 +436,44 @@ let locally_collectible_heap_between
   results db real2 req
 
 let max_control_ratio { db; procs; } ~proc () =
-  (* granularity ignored for now *)
   let req =
     Printf.sprintf
       "SELECT max(arg3) FROM events
-       WHERE kind = \"HEAP_RATIO\" AND argptr = %d
-       ORDER BY time;
+       WHERE kind = \"HEAP_RATIO\" AND argptr = %d;
        "
       procs.(proc)
   in
   try result db real req with _ -> 0.
+
+let max_copy { db; procs; } ~proc () =
+  let req =
+    Printf.sprintf
+      "SELECT max(arg1) FROM events
+       WHERE kind = \"COPY\" AND argptr = %d;
+       "
+      procs.(proc)
+  in
+  try result db real req with _ -> 0.
+
+let copy_between
+      { db; procs }
+      ~between
+      ~proc
+      ~granularity
+      () =
+  (* granularity ignored for now *)
+  let req =
+    Printf.sprintf
+      "SELECT time, arg1 FROM events
+       WHERE kind = \"COPY\" AND %f <= time AND time <= %f
+       AND argptr = %d
+       ORDER BY time;
+       "
+      between.Range.l
+      between.Range.u
+      procs.(proc)
+  in
+  results db real2 req
 
 (* Statistics *)
 

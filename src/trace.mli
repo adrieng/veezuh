@@ -114,6 +114,20 @@ val max_control_ratio :
   unit ->
   float
 
+val max_copy :
+  t ->
+  proc:int ->
+  unit ->
+  float
+
+val copy_between :
+  t ->
+  between:Range.span ->
+  proc:int ->
+  granularity:float ->
+  unit ->
+  (float * float) list
+
 (* Statistics *)
 
 type proc_stats =

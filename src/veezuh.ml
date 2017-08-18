@@ -94,6 +94,14 @@ let build_keys_for_processor trace ~proc =
     }
   in
 
+  let copy =
+    {
+      Timeline.max = Trace.max_copy trace ~proc ();
+      Timeline.samples = Trace.copy_between trace ~proc ();
+      Timeline.alpha_mult = 0.1;
+    }
+  in
+
   let ratio_max = Trace.max_ratio trace ~proc in
   let ratio =
     {
@@ -182,6 +190,11 @@ let build_keys_for_processor trace ~proc =
                     ~leave:"GC_LEAVE"))
         ~color:(1.000, 0.647, 0.000, 0.9)
         ~visible:true;
+      make_key
+        ~name:"Bytes Copied"
+        ~kind:(Signal copy)
+        ~color:(0.596, 0.984, 0.596, 1.)
+        ~visible:false;
       make_key
         ~name:"Runtime"
         ~kind:(Activity
@@ -414,6 +427,7 @@ let add_global_model_row_from_tl_rows info rows =
     | "Thread Copy"
     | "Initialization" | "Launch" | "Halt Request" | "Halt Ack"
     | "Array Allocation"
+    | "Bytes Copied"
       ->
        global_row
 
