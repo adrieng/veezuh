@@ -27,7 +27,7 @@ let print_to_string print x =
 
 let print_size fmt t =
   let m, p = find_good_unit_scaling @@ float t in
-  Format.fprintf fmt "%.2f %sb" (m *. float t) p
+  Format.fprintf fmt "%.2f %sB" (m *. float t) p
 
 let get_opt o =
   match o with
