@@ -324,6 +324,18 @@ let max_chunkp_occupancy { db; _ } =
   | Some i ->
      i
 
+let max_bytes_copied { db; _ } =
+  let req =
+    "SELECT max(arg1)
+     FROM events
+     WHERE kind = \"COPY\";"
+  in
+  match result db into req with
+  | None ->
+     0
+  | Some i ->
+     i
+
 let chunkp_occupancy_between { db; _ } ~between ~granularity () =
   let { Range.l; Range.u; } = between in
   let req =
@@ -613,6 +625,7 @@ type stats =
     user_mut_time : Range.time;
     max_chunkp_occupancy : int;
     max_chunkp_size : int;
+    max_bytes_copied : int;
     per_proc_stats : proc_stats list;
   }
 
@@ -625,6 +638,7 @@ let print_stats
         user_mut_time;
         max_chunkp_occupancy;
         max_chunkp_size;
+        max_bytes_copied;
         per_proc_stats;
       } =
   let print_proc_i i pstats =
@@ -647,6 +661,8 @@ let print_stats
     Utils.print_size max_chunkp_occupancy
     Utils.print_size max_chunkp_size
     (float max_chunkp_occupancy /. float max_chunkp_size *. 100.);
+  Format.fprintf fmt "MAX BYTES COPIED: %a@\n"
+    Utils.print_size max_bytes_copied;
   List.iteri print_proc_i per_proc_stats;
   ()
 
@@ -685,6 +701,7 @@ let statistics trace =
 
   let max_chunkp_occupancy = max_chunkp_occupancy trace in
   let max_chunkp_size = max_chunkp_size trace in
+  let max_bytes_copied = max_bytes_copied trace in
 
   {
     real_exec_time;
@@ -693,5 +710,6 @@ let statistics trace =
     user_mut_time;
     max_chunkp_occupancy;
     max_chunkp_size;
+    max_bytes_copied;
     per_proc_stats;
   }

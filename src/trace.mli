@@ -150,6 +150,7 @@ type stats =
     user_mut_time : Range.time;
     max_chunkp_occupancy : int;
     max_chunkp_size : int;
+    max_bytes_copied : int;
     per_proc_stats : proc_stats list;
   }
 
