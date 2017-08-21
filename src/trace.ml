@@ -298,23 +298,41 @@ let max_heap_size { db; _ } =
   | Some i ->
      i
 
+(* TODO factor out the various heap/chunkp_size/occupancy_between *)
+
 let heap_size_between { db; _ } ~between ~granularity () =
   let { Range.l; Range.u; } = between in
+  let res =
+    let req =
+      Printf.sprintf
+        "SELECT max(time), max(arg1)
+         FROM events
+         WHERE kind = 'HEAP_OCCUPANCY'
+         AND %f <= time AND time <= %f
+         GROUP BY CAST (time / %f AS INTEGER)
+         HAVING %f <= time AND time <= %f;"
+        l
+        u
+        granularity
+        l
+        u
+    in
+    results db real2 req
+  in
   let req =
     Printf.sprintf
-      "SELECT max(time), max(arg1)
+      "SELECT arg2
        FROM events
        WHERE kind = 'HEAP_OCCUPANCY'
-       AND %f <= time AND time <= %f
-       GROUP BY CAST (time / %f AS INTEGER)
-       HAVING %f <= time AND time <= %f;"
+       AND time < %f
+       ORDER BY time DESC LIMIT 1;"
       l
-      u
-      granularity
-      l
-      u
   in
-  results db real2 req
+  match results db real req with
+  | [] ->
+     res
+  | v :: _ ->
+     (l, v) :: res
 
 let max_heap_occupancy { db; _ } =
   let req =
@@ -330,21 +348,37 @@ let max_heap_occupancy { db; _ } =
 
 let heap_occupancy_between { db; _ } ~between ~granularity () =
   let { Range.l; Range.u; } = between in
+  let res =
+    let req =
+      Printf.sprintf
+        "SELECT max(time), max(arg2)
+         FROM events
+         WHERE kind = 'HEAP_OCCUPANCY'
+         AND %f <= time AND time <= %f
+         GROUP BY CAST (time / %f AS INTEGER)
+         HAVING %f <= time AND time <= %f;"
+        l
+        u
+        granularity
+        l
+        u
+    in
+    results db real2 req
+  in
   let req =
     Printf.sprintf
-      "SELECT max(time), max(arg2)
+      "SELECT arg2
        FROM events
        WHERE kind = 'HEAP_OCCUPANCY'
-       AND %f <= time AND time <= %f
-       GROUP BY CAST (time / %f AS INTEGER)
-       HAVING %f <= time AND time <= %f;"
+       AND time < %f
+       ORDER BY time DESC LIMIT 1;"
       l
-      u
-      granularity
-      l
-      u
   in
-  results db real2 req
+  match results db real req with
+  | [] ->
+     res
+  | v :: _ ->
+     (l, v) :: res
 
 let max_chunkp_size { db; _ } =
   let req =
@@ -398,7 +432,21 @@ let chunkp_occupancy_between { db; _ } ~between ~granularity () =
       l
       u
   in
-  results db real2 req
+  let res = results db real2 req in
+  let req =
+    Printf.sprintf
+      "SELECT arg2
+       FROM events
+       WHERE kind = 'CHUNKP_OCCUPANCY'
+       AND time < %f
+       ORDER BY time DESC LIMIT 1;"
+      l
+  in
+  match results db real req with
+  | [] ->
+     res
+  | v :: _ ->
+     (l, v) :: res
 
 let max_ratio { db; procs } ~proc =
   try
