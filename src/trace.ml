@@ -185,6 +185,52 @@ let epoch { db; _ } =
 let number_of_processors { procs; _ } =
   Array.length procs
 
+let signal_between
+      { db; procs; _ }
+      ~kind
+      ~selector
+      ~between
+      ~granularity
+      ~proc
+      () =
+  (* Samples in [between] *)
+  let res =
+    let req =
+      Printf.sprintf
+        "SELECT time, %s FROM events
+         WHERE kind = \"%s\" AND %f <= time AND time <= %f
+         AND argptr = %d
+         ORDER BY time;
+         "
+        selector
+        kind
+        between.Range.l
+        between.Range.u
+        procs.(proc)
+    in
+    results db real2 req
+  in
+  (* Add the latest sample strictly before, if any *)
+  let req =
+    Printf.sprintf
+      "SELECT %s FROM events
+       WHERE kind = \"%s\" AND time < %f
+       AND argptr = %d
+       ORDER BY time DESC LIMIT 1;
+       "
+      selector
+      kind
+      between.Range.l
+      procs.(proc)
+  in
+  match results db real req with
+  | [] ->
+     res
+  | [v] ->
+     (between.Range.l, v) :: res
+  | _ :: _ :: _ ->
+     assert false
+
 let activities_between
       trace
       ~name
@@ -466,26 +512,6 @@ let max_copy { db; procs; } ~proc () =
       procs.(proc)
   in
   try result db real req with _ -> 0.
-
-let copy_between
-      { db; procs }
-      ~between
-      ~proc
-      ~granularity
-      () =
-  (* granularity ignored for now *)
-  let req =
-    Printf.sprintf
-      "SELECT time, arg1 FROM events
-       WHERE kind = \"COPY\" AND %f <= time AND time <= %f
-       AND argptr = %d
-       ORDER BY time;
-       "
-      between.Range.l
-      between.Range.u
-      procs.(proc)
-  in
-  results db real2 req
 
 (* Statistics *)
 

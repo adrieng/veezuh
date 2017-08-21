@@ -95,9 +95,12 @@ let build_keys_for_processor trace ~proc =
   in
 
   let copy =
+    let copied_between =
+      Trace.signal_between trace ~kind:"COPY" ~selector:"arg1" ~proc ()
+    in
     {
       Timeline.max = Trace.max_copy trace ~proc ();
-      Timeline.samples = Trace.copy_between trace ~proc ();
+      Timeline.samples = copied_between;
       Timeline.alpha_mult = 0.1;
     }
   in

@@ -10,6 +10,16 @@ val epoch : t -> Range.span
 
 val number_of_processors : t -> int
 
+val signal_between :
+  t ->
+  kind:string ->
+  selector:string ->
+  between:Range.span ->
+  granularity:Range.time ->
+  proc:int ->
+  unit ->
+  (float * float) list
+
 val activities_between :
   t ->
   name:string ->
@@ -119,14 +129,6 @@ val max_copy :
   proc:int ->
   unit ->
   float
-
-val copy_between :
-  t ->
-  between:Range.span ->
-  proc:int ->
-  granularity:float ->
-  unit ->
-  (float * float) list
 
 (* Statistics *)
 
