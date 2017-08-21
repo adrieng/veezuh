@@ -136,6 +136,7 @@ type proc_stats =
     total_gc_time : Range.time;
     total_gsec_time : Range.time;
     total_mut_time : Range.time;
+    total_bytes_copied : int;
   }
 
 val print_proc_stats : Format.formatter -> proc_stats -> unit

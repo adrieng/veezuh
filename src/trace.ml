@@ -495,6 +495,7 @@ type proc_stats =
     total_gc_time : Range.time;
     total_gsec_time : Range.time;
     total_mut_time : Range.time;
+    total_bytes_copied : int;
   }
 
 let print_proc_stats fmt pstats =
@@ -506,9 +507,11 @@ let print_proc_stats fmt pstats =
   Format.fprintf fmt "GSEC TIME: %a (%.2f%%)@ "
     Range.print_time pstats.total_gsec_time
     (pstats.total_gsec_time /. pstats.total_exec_time *. 100.);
-  Format.fprintf fmt "MUT TIME: %a (%.2f%%)"
+  Format.fprintf fmt "MUT TIME: %a (%.2f%%)@ "
     Range.print_time pstats.total_mut_time
     (pstats.total_mut_time /. pstats.total_exec_time *. 100.);
+  Format.fprintf fmt "BYTES COPIED: %a"
+    Utils.print_size pstats.total_bytes_copied;
   ()
 
 let processor_statistics ~proc trace =
@@ -610,11 +613,27 @@ let processor_statistics ~proc trace =
     total_exec_time -. total_gc_nogsec_time -. total_gsec_nogc_time
   in
 
+  let total_bytes_copied =
+    let req =
+      Printf.sprintf
+        "SELECT max(arg1)
+         FROM events
+         WHERE argptr = %d AND kind = \"COPY\";"
+      proc_id
+    in
+    match result trace.db into req with
+    | None ->
+       0
+    | Some i ->
+       i
+  in
+
   {
     total_exec_time;
     total_gc_time;
     total_gsec_time;
     total_mut_time;
+    total_bytes_copied;
   }
 
 type stats =
