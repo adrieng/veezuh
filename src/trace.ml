@@ -716,6 +716,8 @@ type stats =
     user_exec_time : Range.time;
     user_gc_time : Range.time;
     user_mut_time : Range.time;
+    max_heap_occupancy : int;
+    max_heap_size : int;
     max_chunkp_occupancy : int;
     max_chunkp_size : int;
     max_bytes_copied : int;
@@ -729,6 +731,8 @@ let print_stats
         user_exec_time;
         user_gc_time;
         user_mut_time;
+        max_heap_occupancy : int;
+        max_heap_size : int;
         max_chunkp_occupancy;
         max_chunkp_size;
         max_bytes_copied;
@@ -750,6 +754,10 @@ let print_stats
   Format.fprintf fmt "USER MUT TIME: %a (%.2f%%)@\n"
     Range.print_time user_mut_time
     (user_mut_time /. user_exec_time *. 100.);
+  Format.fprintf fmt "HEAP OCCUPANCY: %a / %a (%.2f%%)@\n"
+    Utils.print_size max_heap_occupancy
+    Utils.print_size max_heap_size
+    (float max_heap_occupancy /. float max_heap_size *. 100.);
   Format.fprintf fmt "CHUNKPOOL OCCUPANCY: %a / %a (%.2f%%)@\n"
     Utils.print_size max_chunkp_occupancy
     Utils.print_size max_chunkp_size
@@ -792,6 +800,9 @@ let statistics trace =
     List.map (fun pstats -> pstats.total_mut_time) per_proc_stats |> Utils.sum
   in
 
+  let max_heap_occupancy = max_heap_occupancy trace in
+  let max_heap_size = max_heap_size trace in
+
   let max_chunkp_occupancy = max_chunkp_occupancy trace in
   let max_chunkp_size = max_chunkp_size trace in
   let max_bytes_copied = max_bytes_copied trace in
@@ -801,6 +812,8 @@ let statistics trace =
     user_exec_time;
     user_gc_time;
     user_mut_time;
+    max_heap_occupancy;
+    max_heap_size;
     max_chunkp_occupancy;
     max_chunkp_size;
     max_bytes_copied;

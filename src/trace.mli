@@ -151,6 +151,8 @@ type stats =
     user_exec_time : Range.time;
     user_gc_time : Range.time;
     user_mut_time : Range.time;
+    max_heap_occupancy : int;
+    max_heap_size : int;
     max_chunkp_occupancy : int;
     max_chunkp_size : int;
     max_bytes_copied : int;
