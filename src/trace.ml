@@ -404,6 +404,40 @@ let max_chunkp_occupancy { db; _ } =
   | Some i ->
      i
 
+let max_array_mem { db; _ } =
+  let req =
+    "SELECT sum(arg2 * arg3)
+     FROM events
+     WHERE kind = \"ARRAY_ALLOCATE_ENTER\";"
+  in
+  match result db into req with
+  | None ->
+     0
+  | Some i ->
+     i
+
+let array_mem_between { db; _; } ~between ~granularity () =
+  let { Range.l; Range.u; } = between in
+  let create_req =
+    Printf.sprintf
+      "CREATE TEMPORARY TABLE allocs(time REAL, size REAL);
+       INSERT INTO allocs
+       SELECT time, arg2 * arg3
+       FROM events
+       WHERE kind = \"ARRAY_ALLOCATE_ENTER\" AND %f <= time AND time <= %f
+       ORDER BY time;"
+      l
+      u
+  in
+  execute db create_req;
+  let select_req =
+    "SELECT a.time, (SELECT sum(b.size) FROM allocs b WHERE b.time <= a.time)
+     FROM allocs a;"
+  in
+  let res = results db real2 select_req in
+  execute db "DROP TABLE allocs;";
+  res
+
 let max_bytes_copied { db; _ } =
   let req =
     "SELECT max(arg1)

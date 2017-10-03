@@ -77,6 +77,17 @@ val chunkp_occupancy_between :
   unit ->
   (float * float) list
 
+val max_array_mem :
+  t ->
+  int
+
+val array_mem_between :
+  t ->
+  between:Range.span ->
+  granularity:float ->
+  unit ->
+  (float * float) list
+
 val max_ratio :
   t ->
   proc:int ->

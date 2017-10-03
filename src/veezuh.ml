@@ -71,6 +71,23 @@ let build_heap_keys trace =
       ~visible:false
   in
 
+  let alloc_occupancy =
+    let kind =
+      Timeline.Signal
+        {
+          Timeline.max = float @@ Trace.max_array_mem trace;
+          Timeline.samples = Trace.array_mem_between trace ();
+          Timeline.alpha_mult = 0.1;
+        }
+    in
+    Timeline.make_key
+      ~name:"Array Allocations"
+      ~kind
+      ~color:(0.000, 1.000, 0.498, 0.8)
+      ~visible:false
+  in
+
+  Timeline.row_add_key heap alloc_occupancy;
   Timeline.row_add_key heap heap_size;
   Timeline.row_add_key heap heap_occupancy;
   Timeline.row_add_key heap chunkp_occupancy;
