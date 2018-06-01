@@ -66,7 +66,6 @@ module HashedString =
 
 module SSet = Set.Make(HashedString)
 module SHashTable = Hashtbl.Make(HashedString)
-module SWeakTable = Ephemeron.K1.Make(HashedString)
 
 (* Math stuff *)
 
