@@ -765,8 +765,8 @@ let print_stats
         user_exec_time;
         user_gc_time;
         user_mut_time;
-        max_heap_occupancy : int;
-        max_heap_size : int;
+        max_heap_occupancy;
+        max_heap_size;
         max_chunkp_occupancy;
         max_chunkp_size;
         max_bytes_copied;
