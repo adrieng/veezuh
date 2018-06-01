@@ -8,7 +8,7 @@ language. It is very rough at the moment; expect hangs and hiccups!
 ## Installation
 
 ```bash
-opam pin add veezuh https://github.com/adrieng/veezuh
+opam pin add veezuh git://github.com/adrieng/veezuh
 ```
 
 ## Screenshot
